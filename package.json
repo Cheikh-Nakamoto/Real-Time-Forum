@@ -1,0 +1,16 @@
+{
+  "name": "real-time-forum",
+  "version": "1.0.0",
+  "description": "### Objectives On this project you will have to focus on a few points: - Registration and Login - Creation of posts     * Commenting posts - Private Messages",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@radix-ui/react-avatar": "^1.0.4",
+    "bootstrap-icons": "^1.11.3"
+  }
+}

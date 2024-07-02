@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de Bord des Notifications</title>
+    <link rel="shortcut icon" href="#" type="image/x-icon">
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+
+<body>
+    <div class="head">
+        <div class="logo">
+            <img src="/assets/img/logo/logo2.png" height="100px" alt="logo">
+        </div>
+        <div class="right-head">
+            <div id="user-connect" class="user-connect">
+                <div class="">
+                    <img data-image width="50px"
+                        src="https://cdn.pixabay.com/photo/2020/07/01/12/58/icon-5359553_960_720.png" alt="" srcset="">
+                </div>
+                <div class="connect-username" data-connect>
+                    <h3>Login/Register</h3>
+                </div>
+            </div>
+            <div id="notification">
+            </div>
+        </div>
+    </div>
+    <div class="main">
+        <div class="sidebar">
+            <div id="communaut" class="menu-item">
+                <div id="communaute"></div>
+                Communauté
+            </div>
+            <div class="menu-item">
+                <div id="message"></div>Chat
+            </div>
+            <div class="menu-item">
+                <div id="like"></div>
+                Mentions J'aime
+            </div>
+            <div class="menu-item">
+                <div id="share"></div>
+                Partager
+            </div>
+            <div id="posts" class="menu-item">
+                <div id="post"></div>
+                Publications
+            </div>
+            <div class="menu-item" id="logout">Déconnexion</div>
+        </div>
+        <div class="content">
+            <div id="change" class="dashboard">
+            </div>
+        </div>
+        <div class="rightbar">
+            <div class="online" id="online-users">
+                <div class="title">
+                    <h3>Online</h3>
+                </div>
+
+                <div>
+                    <ul class="userimage" id="online-users"></ul>
+                </div>
+            </div>
+            <div class="offline">
+                <div class="title">
+                    <h3>Offline</h3>
+                </div>
+                <div>
+                    <ul class="userimage" id="offline-users"> </ul>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+    <script src="/assets/js/animation.js"></script>
+
+    <script type="module" src="/assets/js/home.js"></script>
+    <script type="module" src="/assets/js/post.js"></script>
+    <script type="module" src="/assets/js/connect-user.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.9.4/lottie.min.js"></script>
+
+</body>
+
+</html>
