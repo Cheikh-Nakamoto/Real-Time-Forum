@@ -1,4 +1,6 @@
 pub mod request;
+use std::io::Error;
+
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -53,6 +55,10 @@ impl Server {
             directory_listing,
         }
     }
+
+    pub fn start() {}
+
+    pub fn stop() {}
 
     pub fn handle_request(req: Request) -> Response {
         todo!()

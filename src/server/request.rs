@@ -4,7 +4,7 @@
 pub struct Request {
     pub url: String,
     pub method: String,
-    pub body: String
+    pub body: String,
 }
 
 impl Request {
