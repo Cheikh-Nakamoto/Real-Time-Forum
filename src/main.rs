@@ -1,3 +1,5 @@
+use localhost::Session;
+
 fn main() {
-    println!("Hello world!");
+    println!("{:?}", Session::new());
 }
