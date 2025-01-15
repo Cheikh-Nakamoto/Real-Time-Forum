@@ -1,5 +1,4 @@
 pub mod request;
-use std::io::Error;
 
 pub use request::*;
 pub mod response;
@@ -8,6 +7,8 @@ pub mod router;
 pub use router::*;
 pub mod session;
 pub use session::*;
+pub mod cgi;
+pub use cgi::*;
 
 // -------------------------------------------------------------------------------------
 // SERVER
@@ -63,5 +64,7 @@ impl Server {
     pub fn handle_request(req: Request) -> Response {
         todo!()
     }
+
+    pub fn access_log(req: Request) {}
 }
 // -------------------------------------------------------------------------------------
