@@ -1,5 +1,7 @@
 pub mod request;
+use std::{ net::{ TcpListener, TcpStream }, thread };
 
+use mio::Token;
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -9,6 +11,9 @@ pub mod session;
 pub use session::*;
 pub mod cgi;
 pub use cgi::*;
+pub mod client;
+pub use client::*;
+
 
 // -------------------------------------------------------------------------------------
 // SERVER
@@ -57,14 +62,33 @@ impl Server {
         }
     }
 
-    pub fn start() {}
+    pub fn start(&self) {
+        for port in &self.ports {
+            let mut client : Client = Client::new(format!("{}:{}", self.ip_addr, port).as_str());
+            client.run();
+        }
+    }
 
     pub fn stop() {}
 
-    pub fn handle_request(req: Request) -> Response {
-        todo!()
-    }
+    // fn handle_request(&self, mut stream: TcpStream) {
+    //     let mut buffer = [0; 1024];
+    //     stream.read(&mut buffer).unwrap();
 
-    pub fn access_log(req: Request) {}
+    //     let request = Request::from_bytes(&buffer).unwrap();
+    //     let response = self.handle_request(request);
+
+    //     stream.write(&response.to_bytes()).unwrap();
+    //     stream.flush().unwrap();
+    // }
+    // pub fn access_log(&self, req: &Request) {
+    //     let mut file = OpenOptions::new()
+    //         .append(true)
+    //         .create(true)
+    //         .open(&self.access_log)
+    //         .unwrap();
+
+    //     writeln!(file, "{} {} {}", req.method, req.path, "200 OK").unwrap();
+    // }
 }
 // -------------------------------------------------------------------------------------
