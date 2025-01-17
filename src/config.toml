@@ -1,6 +1,6 @@
 [log_files]
-error_log = "logs/errors.log"
-access_log = "logs/access.log"
+error_log = "src/logs/errors.log"
+access_log = "src/logs/access.log"
 events_limit = 128
 
 [http]
@@ -8,29 +8,29 @@ access_log_format = "$remote_addr - $remote_user [$time_local] - $method - $stat
 timeout = 3000 # seconds
 size_limit = 5000 # kb
 
-[http.server]
+[http.servers]
 
-[http.server.server1]
+[http.servers.server1]
 ip_addr = "127.0.0.2"
 hostname = "mylocalhost"
 ports = [80, 81]
-root_directory = "www/"
-error_path = "www/error"
-default_file = "www/index.html"
-access_log = "logs/access.log"
+root_directory = "src/www/"
+error_path = "src/www/error"
+default_file = "src/www/index.html"
+access_log = "src/logs/access.log"
 cgi_file_format = ".py"
 upload_limit = 5000
 accepted_methods = ["GET"]
 directory_listing = true
 
-[http.server.server2]
+[http.servers.server2]
 ip_addr = "127.0.0.10"
 hostname = "fifanela"
 ports = [8080, 8081]
-root_directory = "www/fifanela"
-error_path = "static_files/error.html"
-default_file = "static_files/index.html"
-access_log = "logs/access.log"
+root_directory = "src/www/fifanela"
+error_path = "src/static_files/error.html"
+default_file = "src/static_files/index.html"
+access_log = "src/logs/access.log"
 cgi_file_format = ".py"
 upload_limit = 5000
 accepted_methods = ["GET", "POST"]

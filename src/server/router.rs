@@ -1,10 +1,10 @@
-use super::{Request, Response};
-pub use super::{Server, Session};
-use mio::net::{TcpListener, TcpStream};
-use mio::{Events, Interest, Poll, Token};
+use super::{ Request, Response };
+pub use super::{ Server, Session };
+use mio::net::{ TcpListener, TcpStream };
+use mio::{ Events, Interest, Poll, Token };
 use uuid::Uuid;
 use std::collections::HashMap;
-use std::io::{self, Read, Write};
+use std::io::{ self, Read, Write };
 use std::net::ToSocketAddrs;
 
 // -------------------------------------------------------------------------------------
@@ -17,7 +17,7 @@ pub struct Router {
     pub servers: Vec<Server>,
     pub sessions: Vec<Session>,
     pub listeners: HashMap<Token, TcpListener>, // Associe un token à un TcpListener
-    pub clients: HashMap<Token, TcpStream>,     // Associe un token à un TcpStream
+    pub clients: HashMap<Token, TcpStream>, // Associe un token à un TcpStream
     pub next_token: usize,
 }
 
@@ -43,7 +43,7 @@ impl Router {
                 })?;
 
             let listener = TcpListener::bind(addr)?;
-            let token = Token(self.next_token-1000);
+            let token = Token(self.next_token - 1000);
             self.next_token += 1;
             self.listeners.insert(token, listener);
         }
@@ -53,17 +53,18 @@ impl Router {
 
     pub fn remove_server(&mut self, server: Server) -> io::Result<()> {
         // Filtrer les serveurs pour supprimer celui qui correspond
-        self.servers
-            .retain(|s| s.ip_addr != server.ip_addr && s.hostname != server.hostname);
+        self.servers.retain(|s| s.ip_addr != server.ip_addr && s.hostname != server.hostname);
 
         // Fermer les listeners associés à ce serveur
         for &port in &server.ports {
             // Trouver le token associé à ce port
-            let token = self
-                .listeners
+            let token = self.listeners
                 .iter()
                 .find(|(_, listener)| {
-                    listener.local_addr().ok().map(|addr| addr.port()) == Some(port)
+                    listener
+                        .local_addr()
+                        .ok()
+                        .map(|addr| addr.port()) == Some(port)
                 })
                 .map(|(token, _)| *token);
             if let Some(token) = token {
@@ -80,8 +81,7 @@ impl Router {
         self.sessions.push(session);
     }
     pub fn remove_session(mut self, session_id: String) {
-        self.sessions = self
-            .sessions
+        self.sessions = self.sessions
             .into_iter()
             .filter(|s| s.id != session_id)
             .collect();
@@ -93,8 +93,7 @@ impl Router {
 
         // Enregistrer chaque listener avec un token unique
         for (token, listener) in &mut self.listeners {
-            poll.registry()
-                .register(listener, *token, Interest::READABLE)?;
+            poll.registry().register(listener, *token, Interest::READABLE)?;
             server_tokens.insert(*token, listener.local_addr()?);
         }
 
@@ -110,7 +109,7 @@ impl Router {
                 } else {
                     // Données reçues sur un TcpStream
                     self.handle_client(event.token())?;
-                    println!("Nouvelle requête")
+                    println!("Nouvelle requête");
                 }
             }
         }
@@ -122,8 +121,7 @@ impl Router {
             let (mut stream, _) = listener.accept()?;
             let client_token = Token(self.next_token);
             self.next_token += 1;
-            poll.registry()
-                .register(&mut stream, client_token, Interest::READABLE)?;
+            poll.registry().register(&mut stream, client_token, Interest::READABLE)?;
             self.clients.insert(client_token, stream);
             println!("Nouveau client connecté avec le token: {:?}", client_token);
         }
@@ -207,7 +205,7 @@ impl Router {
         }
 
         // Créer une instance de `Request`
-        Request::new(Uuid::new_v4().to_string() ,location, host, port, method, body)
+        Request::new(Uuid::new_v4().to_string(), location, host, port, method, body)
     }
 
     /// Envoie une réponse HTTP au client.
@@ -229,14 +227,14 @@ impl Router {
                 String::new(), // id_session
                 "HTTP/1.1 200 OK".to_string(),
                 "text/html".to_string(),
-                "<h1>Bienvenue !</h1>".to_string(),
+                "<h1>Bienvenue !</h1>".to_string()
             )
         } else {
             Response::new(
                 String::new(), // id_session
                 "HTTP/1.1 404 Not Found".to_string(),
                 "text/html".to_string(),
-                "<h1>Page non trouvée</h1>".to_string(),
+                "<h1>Page non trouvée</h1>".to_string()
             )
         }
     }

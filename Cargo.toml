@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.39"
 mio = { version = "1.0.3", features = ["net","os-poll"] }
+serde = { version = "1.0.217", features = ["derive"] }
+toml = "0.8.19"
 
 [dependencies.uuid]
 version = "1.12.0"
