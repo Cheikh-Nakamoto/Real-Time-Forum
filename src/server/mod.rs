@@ -40,7 +40,7 @@ impl Server {
         cgi_file_format: String,
         upload_limit: u32,
         accepted_methods: Vec<String>,
-        directory_listing: bool
+        directory_listing: bool,
     ) -> Self {
         Self {
             ip_addr,
@@ -57,14 +57,28 @@ impl Server {
         }
     }
 
-    pub fn start() {}
+    pub fn start(&self) {}
 
     pub fn stop() {}
 
-    pub fn handle_request(req: Request) -> Response {
-        todo!()
-    }
+    // fn handle_request(&self, mut stream: TcpStream) {
+    //     let mut buffer = [0; 1024];
+    //     stream.read(&mut buffer).unwrap();
 
-    pub fn access_log(req: Request) {}
+    //     let request = Request::from_bytes(&buffer).unwrap();
+    //     let response = self.handle_request(request);
+
+    //     stream.write(&response.to_bytes()).unwrap();
+    //     stream.flush().unwrap();
+    // }
+    // pub fn access_log(&self, req: &Request) {
+    //     let mut file = OpenOptions::new()
+    //         .append(true)
+    //         .create(true)
+    //         .open(&self.access_log)
+    //         .unwrap();
+
+    //     writeln!(file, "{} {} {}", req.method, req.path, "200 OK").unwrap();
+    // }
 }
 // -------------------------------------------------------------------------------------

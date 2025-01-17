@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.39"
+mio = { version = "1.0.3", features = ["net","os-poll"] }
 
 [dependencies.uuid]
 version = "1.12.0"
