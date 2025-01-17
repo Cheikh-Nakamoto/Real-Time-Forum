@@ -9,6 +9,8 @@ timeout = 3000 # seconds
 size_limit = 5000 # kb
 
 [http.server]
+
+[http.server.server1]
 ip_addr = "127.0.0.2"
 hostname = "mylocalhost"
 ports = [80, 81]
@@ -20,3 +22,16 @@ cgi_file_format = ".py"
 upload_limit = 5000
 accepted_methods = ["GET"]
 directory_listing = true
+
+[http.server.server2]
+ip_addr = "127.0.0.10"
+hostname = "fifanela"
+ports = [8080, 8081]
+root_directory = "www/fifanela"
+error_path = "static_files/error.html"
+default_file = "static_files/index.html"
+access_log = "logs/access.log"
+cgi_file_format = ".py"
+upload_limit = 5000
+accepted_methods = ["GET", "POST"]
+directory_listing = false
