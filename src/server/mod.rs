@@ -1,7 +1,5 @@
 pub mod request;
-use std::{ net::{ TcpListener, TcpStream }, thread };
 
-use mio::Token;
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -11,9 +9,6 @@ pub mod session;
 pub use session::*;
 pub mod cgi;
 pub use cgi::*;
-pub mod client;
-pub use client::*;
-
 
 // -------------------------------------------------------------------------------------
 // SERVER
@@ -45,7 +40,7 @@ impl Server {
         cgi_file_format: String,
         upload_limit: u32,
         accepted_methods: Vec<String>,
-        directory_listing: bool
+        directory_listing: bool,
     ) -> Self {
         Self {
             ip_addr,
@@ -62,12 +57,7 @@ impl Server {
         }
     }
 
-    pub fn start(&self) {
-        for port in &self.ports {
-            let mut client : Client = Client::new(format!("{}:{}", self.ip_addr, port).as_str());
-            client.run();
-        }
-    }
+    pub fn start(&self) {}
 
     pub fn stop() {}
 
