@@ -25,9 +25,6 @@ impl Response {
             self.content_type,
             self.body.len()
         );
-        format!(
-            "{}\r\n{}\r\n{}",
-            self.status, headers, self.body
-        )
+        format!("{}\r\n{}\r\n{}", self.status, headers, self.body)
     }
 }

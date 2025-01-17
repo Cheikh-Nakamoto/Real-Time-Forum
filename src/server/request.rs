@@ -12,7 +12,14 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new(id_session:String ,location: String, host: String, port:u16, method: String, body: String) -> Self {
+    pub fn new(
+        id_session: String,
+        location: String,
+        host: String,
+        port: u16,
+        method: String,
+        body: String
+    ) -> Self {
         Self { id_session, location, host, port, method, body }
     }
 }

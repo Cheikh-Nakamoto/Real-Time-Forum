@@ -6,6 +6,7 @@ pub use response::*;
 pub mod router;
 pub use router::*;
 pub mod session;
+use serde::Deserialize;
 pub use session::*;
 pub mod cgi;
 pub use cgi::*;
@@ -13,7 +14,7 @@ pub use cgi::*;
 // -------------------------------------------------------------------------------------
 // SERVER
 // -------------------------------------------------------------------------------------
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Server {
     pub ip_addr: String,
     pub hostname: String,
