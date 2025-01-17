@@ -2,6 +2,7 @@ use super::{Request, Response};
 pub use super::{Server, Session};
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Token};
+use uuid::Uuid;
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::net::ToSocketAddrs;
@@ -109,6 +110,7 @@ impl Router {
                 } else {
                     // Données reçues sur un TcpStream
                     self.handle_client(event.token())?;
+                    println!("Nouvelle requête")
                 }
             }
         }
@@ -166,19 +168,27 @@ impl Router {
 
     /// Parse une requête HTTP et crée une instance de `Request`.
     fn parse_http_request(&self, request_str: &str) -> Request {
+        let mut location = String::new();
+        let mut host = String::new();
+        let mut port: u16 = 0;
         let mut method = String::new();
-        let mut url = String::new();
         let mut body = String::new();
 
         // Diviser la requête en lignes
         let lines: Vec<&str> = request_str.lines().collect();
 
         // Parser la première ligne (ex: "GET /index.html HTTP/1.1")
-        if let Some(first_line) = lines.get(0) {
-            let parts: Vec<&str> = first_line.split_whitespace().collect();
+        if lines.len() > 3 {
+            let parts: Vec<&str> = lines[0].split_whitespace().collect();
             if parts.len() >= 2 {
                 method = parts[0].to_string(); // Méthode (GET, POST, etc.)
-                url = parts[1].to_string(); // URL (/index.html)
+                location = parts[1].to_string(); // URL (/index.html)
+            }
+            let raw_host = lines[1].strip_prefix("Host: ");
+            if let Some(h) = raw_host {
+                let host_parts: Vec<&str> = h.split(":").collect();
+                host = host_parts[0].to_string();
+                port = host_parts[1].parse::<u16>().unwrap();
             }
         }
 
@@ -197,7 +207,7 @@ impl Router {
         }
 
         // Créer une instance de `Request`
-        Request::new(url, method, body)
+        Request::new(Uuid::new_v4().to_string() ,location, host, port, method, body)
     }
 
     /// Envoie une réponse HTTP au client.
@@ -210,15 +220,20 @@ impl Router {
 
     // Route une requête HTTP et génère une réponse.
     pub fn route_request(req: Request) -> Response {
+        // On récupère le hostname, l'adresse ip et le port de la requête
+        // On parcoure la liste des serveurs et on vérifie lequel a le hostname, le port et l'ip correspondant
+
         // Exemple de logique de routage
-        if req.url == "/" {
+        if req.location == "/" {
             Response::new(
+                String::new(), // id_session
                 "HTTP/1.1 200 OK".to_string(),
                 "text/html".to_string(),
                 "<h1>Bienvenue !</h1>".to_string(),
             )
         } else {
             Response::new(
+                String::new(), // id_session
                 "HTTP/1.1 404 Not Found".to_string(),
                 "text/html".to_string(),
                 "<h1>Page non trouvée</h1>".to_string(),

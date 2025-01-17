@@ -2,15 +2,17 @@
 // RESPONSE
 // -------------------------------------------------------------------------------------
 pub struct Response {
-    pub status_line: String,
+    pub id_session: String,
+    pub status: String,
     pub content_type: String,
     pub body: String,
 }
 
 impl Response {
-    pub fn new(status_line: String, content_type: String, body: String) -> Self {
+    pub fn new(id_session: String, status: String, content_type: String, body: String) -> Self {
         Self {
-            status_line,
+            id_session,
+            status,
             content_type,
             body,
         }
@@ -25,7 +27,7 @@ impl Response {
         );
         format!(
             "{}\r\n{}\r\n{}",
-            self.status_line, headers, self.body
+            self.status, headers, self.body
         )
     }
 }

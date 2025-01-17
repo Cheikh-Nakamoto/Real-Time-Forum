@@ -4,8 +4,8 @@ use server::{Router, Server};
 fn main() -> std::io::Result<()> {
     // Crée un serveur
     let server = Server::new(
-        "localhost-01".to_string(),         // ip_addr
-        "localhost".to_string(),         // hostname
+        "127.0.0.2".to_string(),         // ip_addr
+        "localhost-01".to_string(),         // hostname
         vec![8080, 8081],                // ports
         "./www".to_string(),             // root_directory
         "./errors".to_string(),          // error_path
