@@ -1,5 +1,13 @@
 pub mod request;
 
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::Path,
+    process::{Command, Stdio},
+};
+
+use mio::net::TcpStream;
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -58,20 +66,51 @@ impl Server {
         }
     }
 
-    pub fn start(&self) {}
+    pub fn handle_request(&self, mut stream:&mut TcpStream,request : Request) {
+        // Vérifier si le chemin correspond à un fichier statique ou à un script CGI
+        let path = format!("./static_files{}", request.location); // Chemin relatif au dossier public
+        if Path::new(&path).exists() {
+            // Servir un fichier statique
+            self.handle_static_file(&mut stream, &path);
+        } else {
+            // Ressource introuvable
+            Self::send_error_response(&mut stream, 404, "Not Found");
+        }
+    }
 
-    pub fn stop() {}
+    /// Gère une requête pour un fichier statique.
+    fn handle_static_file(&self, stream: &mut TcpStream, path: &str) {
+        match fs::read_to_string(path) {
+            Ok(content) => {
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
+                    content.len(),
+                    content
+                );
+                if let Err(e) = stream.write_all(response.as_bytes()) {
+                    eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Erreur lors de la lecture du fichier : {}", e);
+                Self::send_error_response(stream, 500, "Internal Server Error");
+            }
+        }
+    }
 
-    // fn handle_request(&self, mut stream: TcpStream) {
-    //     let mut buffer = [0; 1024];
-    //     stream.read(&mut buffer).unwrap();
-
-    //     let request = Request::from_bytes(&buffer).unwrap();
-    //     let response = self.handle_request(request);
-
-    //     stream.write(&response.to_bytes()).unwrap();
-    //     stream.flush().unwrap();
-    // }
+    /// Envoie une réponse d'erreur HTTP.
+    fn send_error_response(stream: &mut TcpStream, status_code: u16, status_message: &str) {
+        let response = format!(
+            "HTTP/1.1 {} {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            status_code,
+            status_message,
+            status_message.len(),
+            status_message
+        );
+        if let Err(e) = stream.write_all(response.as_bytes()) {
+            eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
+        }
+    }
     // pub fn access_log(&self, req: &Request) {
     //     let mut file = OpenOptions::new()
     //         .append(true)
