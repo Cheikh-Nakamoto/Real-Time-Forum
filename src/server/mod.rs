@@ -80,7 +80,14 @@ impl Server {
         // Chemin réel du fichier
         let location = self.root_directory.clone() + &request.location;
 
-        let entries = fs::read_dir(&location).expect("Error in discovering entries");
+        let discover = fs::read_dir(&location);
+
+        if discover.is_err() {
+            eprintln!("RESSOURCE NON TROUVÉE");
+            return;
+        }
+
+        let entries = discover.unwrap();
         let all: Vec<DirectoryElement> = entries
             .map(|entry| {
                 let el = entry.unwrap().path();
