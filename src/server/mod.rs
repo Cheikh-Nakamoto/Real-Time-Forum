@@ -89,16 +89,33 @@ impl Server {
     }
 
     /// Gère une requête pour un fichier statique.
-    fn handle_static_file(&self, stream: &mut TcpStream, path:   &str) {
-        match fs::read_to_string(path) {
+    fn handle_static_file(&self, stream: &mut TcpStream, path: &str) {
+        let path = Path::new(path);
+
+        // Déterminer le type de contenu en fonction de l'extension du fichier
+        let content_type = match path.extension().and_then(|ext| ext.to_str()) {
+            Some("html") => "text/html",
+            Some("css") => "text/css",
+            Some("js") => "application/javascript",
+            Some("png") => "image/png",
+            Some("jpg") | Some("jpeg") => "image/jpeg",
+            Some("gif") => "image/gif",
+            Some("json") => "application/json",
+            _ => "text/plain", // Type par défaut
+        };
+
+        match fs::read(path) {
             Ok(content) => {
                 let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
-                    content.len(),
-                    content
+                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
+                    content_type,
+                    content.len()
                 );
                 if let Err(e) = stream.write_all(response.as_bytes()) {
-                    eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
+                    eprintln!("Erreur lors de l'envoi de l'en-tête : {}", e);
+                }
+                if let Err(e) = stream.write_all(&content) {
+                    eprintln!("Erreur lors de l'envoi du contenu : {}", e);
                 }
             }
             Err(e) => {
