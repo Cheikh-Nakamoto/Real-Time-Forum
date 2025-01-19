@@ -2,8 +2,14 @@ body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
-    background-color: #f4f4f4;
-    color: #333;
+    background-color: rgba(55, 2, 2, 0.8); /* Couleur mélangée */
+    color: #ffffff;
+    height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
 }
 header {
     background-color: #333;
@@ -22,19 +28,20 @@ nav a {
     text-decoration: none;
 }
 .container {
-    padding: 20px;
-    text-align: center;
+    width: 60%;
+    height: 50%;
+    background-color:rgba(255, 255, 255, 0.3);
 }
 .welcome-message {
     font-size: 24px;
     margin-bottom: 20px;
 }
 .actions {
-    margin-top: 20px;
+    width: 100%;
 }
 .actions button {
     padding: 10px 20px;
-    margin: 5px;
+    margin: 0 5px 0 5px;
     border: none;
     background-color: #333;
     color: #fff;
@@ -42,4 +49,35 @@ nav a {
 }
 .actions button:hover {
     background-color: #555;
+}
+
+footer {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    width: 60%;
+}
+
+.seachbar {
+    padding: 7px 7px;
+    height: 60%;
+    background-color: #333;
+    color: #fff;
+    align-self: baseline;
+    border-radius: 10%;
+}
+
+#seachbar{
+    background: none;
+    width: 100%;
+    height: 100%;
+    font-size: large;
+    color: white;
+    box-shadow: none !important;
+    border: none !important;
+    outline: none;
+}
+   
+.add{
+    vertical-align: middle;
 }
