@@ -1,11 +1,10 @@
-use super::{Request, Response};
+use super::Request;
 pub use super::{Server, Session};
 use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Token};
 use std::collections::HashMap;
-use std::io::{self, Read, Write};
+use std::io::{self};
 use std::net::ToSocketAddrs;
-use uuid::Uuid;
 
 // -------------------------------------------------------------------------------------
 // ROUTER
@@ -110,7 +109,7 @@ impl Router {
                 } else {
                     // Données reçues sur un TcpStream
                     println!("voila le token {:?}", event.token());
-                    let (mut stream) = (self.clients.get_mut(&event.token()))
+                    let stream = (self.clients.get_mut(&event.token()))
                         .expect("Erreur lors de la recupeartion du canal tcpstream");
                     let req = Request::read_request(stream, event.token());
                     println!("voila la requete {:?}", req);

@@ -1,4 +1,4 @@
-use std::io::{self, Error, Read};
+use std::io::{Read};
 
 use mio::{net::TcpStream, Token};
 use uuid::Uuid;
