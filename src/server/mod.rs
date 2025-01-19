@@ -84,15 +84,7 @@ impl Server {
 
         if discover.is_err() {
             let output = "RESSOURCE NON TROUVÉE";
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
-                output.len(),
-                output
-            );
-            if let Err(e) = stream.write_all(response.as_bytes()) {
-                eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
-            }
-            eprintln!("{}", output);
+            Self::send_error_response(stream, 404, &output);
             return;
         }
 
@@ -162,6 +154,8 @@ impl Server {
         );
         if let Err(e) = stream.write_all(response.as_bytes()) {
             eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
+        } else {
+            eprintln!("{}", status_message);
         }
     }
     // pub fn access_log(&self, req: &Request) {
