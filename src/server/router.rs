@@ -111,7 +111,7 @@ impl Router {
                     // Données reçues sur un TcpStream
                     println!("voila le token {:?}", event.token());
                     let (mut stream) = (self.clients.get_mut(&event.token()))
-                        .expect("Erreur losr de la recupeartion du canal tcpstream");
+                        .expect("Erreur lors de la recupeartion du canal tcpstream");
                     let req = Request::read_request(stream, event.token());
                     println!("voila la requete {:?}", req);
                     Self::route_request(self.servers.clone(), &req, stream);
@@ -141,7 +141,7 @@ impl Router {
     pub fn route_request(servers: Vec<Server>, req: &Request, stream: &mut TcpStream) {
         // On récupère le hostname, l'adresse ip et le port de la requête
         // On parcoure la liste des serveurs et on vérifie lequel a le hostname, le port et l'ip correspondant
-        for server in servers.clone() {
+        for server in servers.into_iter() {
             if server.ip_addr == req.host && server.ports.contains(&req.port) {
                 println!("{} la resoudre", server.ip_addr);
                 server.handle_request(stream, req.clone());

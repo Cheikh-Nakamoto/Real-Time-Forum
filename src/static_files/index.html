@@ -1,1 +1,17 @@
-<h1>Bienvenue à DiwaneDaraBèneNdakaru</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    {% for el in elements %}
+        {% if el.is_directory %}
+        <a href="{{el.link}}">{{el.entry}}</a>
+        {% else %}
+        <span>{{el.entry}}</span>
+        {% endif %}
+    {% endfor %}
+</body>
+</html>

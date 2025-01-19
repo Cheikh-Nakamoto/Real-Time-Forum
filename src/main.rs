@@ -7,6 +7,7 @@ fn main() -> std::io::Result<()> {
     // Crée un routeur et ajoute le serveur
     let mut router = Router::new();
 
+    // Ajouter les serveurs au routeur
     for (_, s) in config.http.servers {
         router.add_server(s)?;        
     }
