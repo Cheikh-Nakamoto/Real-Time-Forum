@@ -1,6 +1,6 @@
 pub mod request;
 
-use std::{ fs, io::{ Write }, path::Path };
+use std::{ fs, io::Write, path::Path };
 
 use mio::net::TcpStream;
 pub use request::*;

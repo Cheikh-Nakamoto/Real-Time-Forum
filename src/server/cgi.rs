@@ -13,7 +13,7 @@ impl CGI {
         }
     }
 
-    pub fn execute_file(filename: String) -> String {
+    pub fn execute_file(_filename: String) -> String {
         todo!()
     }
 }
