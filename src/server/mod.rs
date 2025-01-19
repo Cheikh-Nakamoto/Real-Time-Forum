@@ -1,5 +1,13 @@
 pub mod request;
 
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::Path,
+    process::{Command, Stdio},
+};
+
+use mio::net::TcpStream;
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -58,20 +66,78 @@ impl Server {
         }
     }
 
-    pub fn start(&self) {}
+    pub fn handle_request(&self, mut stream:&mut TcpStream,request : Request) {
+        // Vérifier si le chemin correspond à un fichier statique ou à un script CGI
+        // Déterminer le chemin de la ressource demandée
+        let location = if request.location == "/" {
+            "/index.html".to_string()
+        } else {
+            request.location
+        };
+        let path = format!("./src/static_files{}", location); // Chemin relatif au dossier public
+        println!("if path exist {}", Path::new(&path).exists() );
+        println!("Chemin vérifié : {}", path);
+        if Path::new(&path).exists() {
+            // Servir un fichier statique
+            self.handle_static_file(&mut stream, &path);
+            println!("Handle static function");
+        } else {
+            // Ressource introuvable
+            println!("Handle static function error");
+            Self::send_error_response(&mut stream, 404, "Not Found");
+        }
+    }
 
-    pub fn stop() {}
+    /// Gère une requête pour un fichier statique.
+    fn handle_static_file(&self, stream: &mut TcpStream, path: &str) {
+        let path = Path::new(path);
 
-    // fn handle_request(&self, mut stream: TcpStream) {
-    //     let mut buffer = [0; 1024];
-    //     stream.read(&mut buffer).unwrap();
+        // Déterminer le type de contenu en fonction de l'extension du fichier
+        let content_type = match path.extension().and_then(|ext| ext.to_str()) {
+            Some("html") => "text/html",
+            Some("css") => "text/css",
+            Some("js") => "application/javascript",
+            Some("png") => "image/png",
+            Some("jpg") | Some("jpeg") => "image/jpeg",
+            Some("gif") => "image/gif",
+            Some("json") => "application/json",
+            _ => "text/plain", // Type par défaut
+        };
 
-    //     let request = Request::from_bytes(&buffer).unwrap();
-    //     let response = self.handle_request(request);
+        match fs::read(path) {
+            Ok(content) => {
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
+                    content_type,
+                    content.len()
+                );
+                if let Err(e) = stream.write_all(response.as_bytes()) {
+                    eprintln!("Erreur lors de l'envoi de l'en-tête : {}", e);
+                }
+                if let Err(e) = stream.write_all(&content) {
+                    eprintln!("Erreur lors de l'envoi du contenu : {}", e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Erreur lors de la lecture du fichier : {}", e);
+                Self::send_error_response(stream, 500, "Internal Server Error");
+            }
+        }
+    }
 
-    //     stream.write(&response.to_bytes()).unwrap();
-    //     stream.flush().unwrap();
-    // }
+    /// Envoie une réponse d'erreur HTTP.
+    fn send_error_response(stream: &mut TcpStream, status_code: u16, status_message: &str) {
+        let response = format!(
+            "HTTP/1.1 {} {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            status_code,
+            status_message,
+            status_message.len(),
+            status_message
+        );
+        if let Err(e) = stream.write_all(response.as_bytes()) {
+            eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
+        }
+    }
     // pub fn access_log(&self, req: &Request) {
     //     let mut file = OpenOptions::new()
     //         .append(true)
