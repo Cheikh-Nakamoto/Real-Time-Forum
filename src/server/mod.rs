@@ -83,7 +83,16 @@ impl Server {
         let discover = fs::read_dir(&location);
 
         if discover.is_err() {
-            eprintln!("RESSOURCE NON TROUVÉE");
+            let output = "RESSOURCE NON TROUVÉE";
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
+                output.len(),
+                output
+            );
+            if let Err(e) = stream.write_all(response.as_bytes()) {
+                eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
+            }
+            eprintln!("{}", output);
             return;
         }
 
