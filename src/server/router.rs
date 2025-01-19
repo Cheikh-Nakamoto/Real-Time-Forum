@@ -41,7 +41,7 @@ impl Router {
                 .ok_or_else(|| {
                     io::Error::new(io::ErrorKind::Other, "Impossible de résoudre l'adresse")
                 })?;
-                println!("scvnvksndjkvn {}",addr);
+                println!("Adresse de connexion {}",addr);
             let listener = TcpListener::bind(addr)?;
             let token = Token(self.next_token - 1000);
             self.next_token += 1;
@@ -109,9 +109,11 @@ impl Router {
                     println!("Nouvelle connexion sur le port {}", addr.port());
                 } else {
                     // Données reçues sur un TcpStream
+                    println!("voila le token {:?}", event.token());
                     let (mut stream) = (self.clients.get_mut(&event.token()))
                         .expect("Erreur losr de la recupeartion du canal tcpstream");
                     let req = Request::read_request(stream, event.token());
+                    println!("voila la requete {:?}", req);
                     Self::route_request(self.servers.clone(), &req, stream);
                 }
             }
@@ -140,7 +142,8 @@ impl Router {
         // On récupère le hostname, l'adresse ip et le port de la requête
         // On parcoure la liste des serveurs et on vérifie lequel a le hostname, le port et l'ip correspondant
         for server in servers.clone() {
-            if server.hostname == req.host && server.ports.contains(&req.port) {
+            if server.ip_addr == req.host && server.ports.contains(&req.port) {
+                println!("{} la resoudre", server.ip_addr);
                 server.handle_request(stream, req.clone());
             }
         }

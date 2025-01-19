@@ -68,18 +68,28 @@ impl Server {
 
     pub fn handle_request(&self, mut stream:&mut TcpStream,request : Request) {
         // Vérifier si le chemin correspond à un fichier statique ou à un script CGI
-        let path = format!("./static_files{}", request.location); // Chemin relatif au dossier public
+        // Déterminer le chemin de la ressource demandée
+        let location = if request.location == "/" {
+            "/index.html".to_string()
+        } else {
+            request.location
+        };
+        let path = format!("./src/static_files{}", location); // Chemin relatif au dossier public
+        println!("if path exist {}", Path::new(&path).exists() );
+        println!("Chemin vérifié : {}", path);
         if Path::new(&path).exists() {
             // Servir un fichier statique
             self.handle_static_file(&mut stream, &path);
+            println!("Handle static function");
         } else {
             // Ressource introuvable
+            println!("Handle static function error");
             Self::send_error_response(&mut stream, 404, "Not Found");
         }
     }
 
     /// Gère une requête pour un fichier statique.
-    fn handle_static_file(&self, stream: &mut TcpStream, path: &str) {
+    fn handle_static_file(&self, stream: &mut TcpStream, path:   &str) {
         match fs::read_to_string(path) {
             Ok(content) => {
                 let response = format!(
