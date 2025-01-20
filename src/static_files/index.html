@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!--<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -13,8 +13,7 @@
         <span>{{el.entry}}</span>
         {% endif %}
     {% endfor %}
-</body>
-<!-- 
+</body>-->
 <html lang="fr">
 
 <head>
@@ -31,15 +30,21 @@
         </div>
     </div>
     <div class="container">
-
+        {% for el in elements %}
+        {% if el.is_directory %}
+        <a href="{{el.link}}"> <img src="images/folder.png" height="100px" alt="" srcset=""><span> {{el.entry}}</span></a>
+        {% else %}
+       <div class="elem"><img src="images/file.png" height="100px" alt=""> <span>{{el.entry}}</span></div>
+        {% endif %}
+        {% endfor %}
     </div>
     <footer>
         <div class="actions add">
             <button><div class="button_content">
-                <span class="add">Ajouter un fichier</span> <img src="images/add.png" class="add" width="20px" alt="">  
+                <span class="add">Ajouter un fichier</span> <img src="images/add.png" class="add" width="20px" alt="">
             </div></button>
             <button><div class="button_content">
-                <span class="add">Créer un dossier</span> <img src="images/add.png" class="add" width="20px" alt="">  
+                <span class="add">Créer un dossier</span> <img src="images/add.png" class="add" width="20px" alt="">
             </div></button>
         </div>
         <div class="seachbar add">
@@ -48,4 +53,4 @@
     </footer>
 </body>
 
-</html> -->
+</html>
