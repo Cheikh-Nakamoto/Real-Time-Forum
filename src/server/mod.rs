@@ -97,8 +97,13 @@ impl Server {
                     let el = entry.unwrap().path();
                     let name = el.to_str().unwrap().strip_prefix(&location).unwrap().to_string();
 
+                    let mut  entry_name = name.clone();
+                    if let Some(val) = entry_name.strip_prefix("/") {
+                        entry_name = val.to_string();
+                    }
+
                     DirectoryElement {
-                        entry: name.clone(),
+                        entry: entry_name,
                         link: request.location.clone() + &name,
                         is_directory: el.is_dir(),
                     }
