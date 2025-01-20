@@ -26,6 +26,8 @@
                     <a href="{{el.link}}" class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
                         {% if el.is_directory %}
                         <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                        {% elif el.entry_type == "ruby" %}
+                        <i class="fas fa-gem text-4xl text-red-500 mb-2"></i>
                         {% else %}
                         <i class="fas fa-file text-4xl text-gray-200 mb-2"></i>
                         {% endif %}

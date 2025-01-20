@@ -9,6 +9,7 @@ use std::string::String;
 pub struct DirectoryElement {
     pub entry: String,
     pub link: String,
+    pub entry_type: String,
     pub is_directory: bool,
 }
 // -------------------------------------------------------------------------------------
