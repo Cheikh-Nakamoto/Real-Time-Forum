@@ -10,7 +10,7 @@ pub use response::*;
 pub mod router;
 pub use router::*;
 pub mod session;
-use tera::{Context, Tera};
+use tera::{ Context, Tera };
 pub use session::*;
 pub mod cgi;
 pub mod rendering_page;
@@ -74,43 +74,50 @@ impl Server {
         let location = self.root_directory.clone() + &request.location;
 
         let discover = fs::read_dir(&location);
-        let mut entries:ReadDir ;
-        let mut  all: Vec<DirectoryElement> = vec![];
-        let mut dir_path = "".to_string() ;
+        let mut entries: ReadDir;
+        let mut all: Vec<DirectoryElement> = vec![];
+        let mut dir_path = "".to_string();
         if !request.location.contains(".") {
-            location_path=   "/index.html".to_string();
+            location_path = "/index.html".to_string();
             dir_path = "src/static_files".to_string();
         } else {
             location_path = Self::check_and_clean_path(&request.location);
-            dir_path = self.root_directory.clone() ;
-        };
-        if location_path.contains("/image") || location_path.contains("/css"){
+            dir_path = self.root_directory.clone();
+        }
+        if location_path.contains("/image") || location_path.contains("/css") {
             dir_path = "src/static_files".to_string();
         }
         println!("Contenu du répertoire : {:#?}", all);
-        let path = format!("./{}{}",dir_path, location_path); // Chemin relatif au dossier public
+        let path = format!("./{}{}", dir_path, location_path); // Chemin relatif au dossier public
 
         if !discover.is_err() {
             entries = discover.unwrap();
-           all = entries
+            all = entries
                 .map(|entry| {
                     let el = entry.unwrap().path();
                     let name = el.to_str().unwrap().strip_prefix(&location).unwrap().to_string();
 
-                    let mut  entry_name = name.clone();
+                    let mut entry_name = name.clone();
                     if let Some(val) = entry_name.strip_prefix("/") {
                         entry_name = val.to_string();
                     }
 
                     DirectoryElement {
-                        entry: entry_name,
+                        entry: entry_name.clone(),
+                        entry_type: match el.is_dir() {
+                            true => "folder".to_string(),
+                            _ => match entry_name.strip_suffix(".rb") {
+                                Some(_) => "ruby".to_string(),
+                                None => "file".to_string()
+                            }
+                        },
                         link: request.location.clone() + &name,
                         is_directory: el.is_dir(),
                     }
                 })
                 .collect::<Vec<DirectoryElement>>();
             println!("Contenu du répertoire : {:#?}", all);
-            self.handle_listing_directory(&mut stream, &path,all);
+            self.handle_listing_directory(&mut stream, &path, all);
             return;
         }
         println!("if path exist {}", Path::new(&path).exists());
@@ -128,7 +135,12 @@ impl Server {
 
     fn handle_static_file(&self, stream: &mut TcpStream, path: &str) {
         // Déterminer le type de contenu en fonction de l'extension du fichier
-        let content_type = match Path::new(path).extension().and_then(|ext| ext.to_str()) {
+        let mut to_cgi = false;
+        let content_type = match
+            Path::new(path)
+                .extension()
+                .and_then(|ext| ext.to_str())
+        {
             Some("html") => "text/html",
             Some("css") => "text/css",
             Some("js") => "application/javascript",
@@ -136,12 +148,20 @@ impl Server {
             Some("jpg") | Some("jpeg") => "image/jpeg",
             Some("gif") => "image/gif",
             Some("json") => "application/json",
+            Some("rb") => {
+                to_cgi = true;
+                "text/plain"
+            }
             _ => "text/plain", // Type par défaut
         };
 
         // Lire le fichier
         match fs::read(path) {
-            Ok(content) => {
+            Ok(mut content) => {
+                if to_cgi {
+                    content = CGI::execute_file(path.to_string()).into();
+                }
+
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
                     content_type,
@@ -162,7 +182,12 @@ impl Server {
     }
 
     /// Gère une requête pour un fichier statique.
-    fn handle_listing_directory(&self, stream: &mut TcpStream, path: &str, all: Vec<DirectoryElement>) {
+    fn handle_listing_directory(
+        &self,
+        stream: &mut TcpStream,
+        path: &str,
+        all: Vec<DirectoryElement>
+    ) {
         // Chargement du template
         let tera = Tera::new("src/**/*.html").unwrap();
         let mut context = Context::new();
