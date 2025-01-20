@@ -1,0 +1,56 @@
+<!--<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    {% for el in elements %}
+        {% if el.is_directory %}
+        <a href="{{el.link}}">{{el.entry}}</a>
+        {% else %}
+        <span>{{el.entry}}</span>
+        {% endif %}
+    {% endfor %}
+</body>-->
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Localhost - Bienvenue</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="logo">
+        <div class="welcome-message">
+            <img src="images/logo.png" width="200" alt="">
+        </div>
+    </div>
+    <div class="container">
+        {% for el in elements %}
+        {% if el.is_directory %}
+        <a href="{{el.link}}"> <img src="images/folder.png" height="100px" alt="" srcset=""><span> {{el.entry}}</span></a>
+        {% else %}
+       <div class="elem"><img src="images/file.png" height="100px" alt=""> <span>{{el.entry}}</span></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    <footer>
+        <div class="actions add">
+            <button><div class="button_content">
+                <span class="add">Ajouter un fichier</span> <img src="images/add.png" class="add" width="20px" alt="">
+            </div></button>
+            <button><div class="button_content">
+                <span class="add">Créer un dossier</span> <img src="images/add.png" class="add" width="20px" alt="">
+            </div></button>
+        </div>
+        <div class="seachbar add">
+            <input type="text" id="seachbar" placeholder="Searchbar ...">
+        </div>
+    </footer>
+</body>
+
+</html>
