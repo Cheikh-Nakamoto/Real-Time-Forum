@@ -76,13 +76,19 @@ impl Server {
         let discover = fs::read_dir(&location);
         let mut entries:ReadDir ;
         let mut  all: Vec<DirectoryElement> = vec![];
+        let mut dir_path = "".to_string() ;
         if !request.location.contains(".") {
             location_path=   "/index.html".to_string();
+            dir_path = "src/static_files".to_string();
         } else {
-            location_path ="/".to_string() + &*Self::check_and_clean_path(&request.location);
+            location_path = Self::check_and_clean_path(&request.location);
+            dir_path = self.root_directory.clone() ;
         };
+        if location_path.contains("/image") || location_path.contains("/css"){
+            dir_path = "src/static_files".to_string();
+        }
         println!("Contenu du répertoire : {:#?}", all);
-        let path = format!("./src/static_files{}", location_path); // Chemin relatif au dossier public
+        let path = format!("./{}{}",dir_path, location_path); // Chemin relatif au dossier public
 
         if !discover.is_err() {
             entries = discover.unwrap();
@@ -102,10 +108,6 @@ impl Server {
             self.handle_listing_directory(&mut stream, &path,all);
             return;
         }
-
-
-
-        let path = format!("./src/static_files{}", location_path); // Chemin relatif au dossier public
         println!("if path exist {}", Path::new(&path).exists());
         println!("Chemin vérifié : {}", path);
         if Path::new(&path).exists() {
@@ -195,13 +197,13 @@ impl Server {
     }
     fn check_and_clean_path(path: &str) -> String {
         // Trouver l'index du motif "images/" ou "css/"
-        if let Some(index) = path.find("images/").or_else(|| path.find("css/")) {
+        if let Some(index) = path.find("/images/").or_else(|| path.find("/css/")) {
             // Supprimer tout ce qui se trouve avant le motif
             let cleaned_path = &path[index..];
             cleaned_path.to_string()
         } else {
             // Retourner le chemin original si aucun motif n'est trouvé
-            path.to_string()
+            path.strip_prefix("/").unwrap().to_string()
         }
     }
     // pub fn access_log(&self, req: &Request) {
