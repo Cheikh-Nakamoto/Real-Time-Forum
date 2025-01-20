@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Localhost File Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen p-8">
+   
+
+    <div class="bg-[#6d4141] rounded-lg p-6 max-w-4xl mx-auto mb-6">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 mx-auto mb-2">
+                <svg viewBox="0 0 100 100" class="w-full h-full fill-[#ff6b6b]">
+                    <path d="M50 0c27.614 0 50 22.386 50 50s-22.386 50-50 50S0 77.614 0 50 22.386 0 50 0zm0 20c-16.569 0-30 13.431-30 30 0 16.569 13.431 30 30 30 16.569 0 30-13.431 30-30 0-16.569-13.431-30-30-30z"/>
+                </svg>
+            </div>
+            <h1 class="text-white text-2xl font-bold">Localhost</h1>
+        </div>
+        <div class="bg-[#8a6868] rounded-lg p-6 max-w-4xl mx-auto mb-6">
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <!-- File Items -->
+                <div class="relative group">
+                    <div class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
+                        <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                        <span class="text-white text-sm">Home</span>
+                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
+                            <i class="fas fa-times text-white text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="relative group">
+                    <div class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
+                        <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                        <span class="text-white text-sm">About</span>
+                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
+                            <i class="fas fa-times text-white text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="relative group">
+                    <div class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
+                        <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                        <span class="text-white text-sm">Script</span>
+                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
+                            <i class="fas fa-times text-white text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="relative group">
+                    <div class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
+                        <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                        <span class="text-white text-sm">Assets</span>
+                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
+                            <i class="fas fa-times text-white text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="relative group">
+                    <div class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
+                        <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                        <span class="text-white text-sm">Home</span>
+                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
+                            <i class="fas fa-times text-white text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="relative group">
+                    <div class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
+                        <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                        <span class="text-white text-sm">Home</span>
+                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
+                            <i class="fas fa-times text-white text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="relative group">
+                    <div class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
+                        <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                        <span class="text-white text-sm">folder</span>
+                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
+                            <i class="fas fa-times text-white text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="relative group">
+                    <div class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
+                        <i class="fas fa-file text-4xl text-gray-200 mb-2"></i>
+                        <span class="text-white text-sm">file</span>
+                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
+                            <i class="fas fa-times text-white text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+          <!-- Bottom Actions -->
+    <div class="flex justify-between max-w-4xl mx-auto">
+        <div class="flex gap-4">
+            <button class="flex items-center gap-2 px-4 py-2 bg-[#6d4141] text-white rounded-lg hover:bg-[#5d3737] transition-colors">
+                <i class="fas fa-plus"></i>
+                Add file
+            </button>
+            <button class="flex items-center gap-2 px-4 py-2 bg-[#6d4141] text-white rounded-lg hover:bg-[#5d3737] transition-colors">
+                <i class="fas fa-plus"></i>
+                Create folder
+            </button>
+        </div>
+        <input
+            type="search"
+            placeholder="Search ..."
+            class="px-4 py-2 bg-[#472a2a] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff6b6b] placeholder-gray-400"
+        >
+    </div>
+    </div>
+
+  
+</body>
+</html>
