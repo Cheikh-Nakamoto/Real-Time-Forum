@@ -1,30 +1,22 @@
 pub mod request;
-
 use std::{ fs, io::Write, path::Path };
-
+use std::fs::ReadDir;
+pub use std::string::String;
 use mio::net::TcpStream;
 pub use request::*;
 pub mod response;
 pub use response::*;
+
 pub mod router;
 pub use router::*;
 pub mod session;
-use serde::{ Deserialize, Serialize };
+use tera::{Context, Tera};
 pub use session::*;
 pub mod cgi;
-pub use cgi::*;
-use tera::{ Context, Tera };
+pub mod rendering_page;
 
-// -------------------------------------------------------------------------------------
-// DIRECTORY ELEMENT
-// -------------------------------------------------------------------------------------
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DirectoryElement {
-    pub entry: String,
-    pub link: String,
-    pub is_directory: bool,
-}
-// -------------------------------------------------------------------------------------
+pub use cgi::*;
+pub use rendering_page::*;
 
 // -------------------------------------------------------------------------------------
 // SERVER
@@ -77,39 +69,48 @@ impl Server {
         println!("On veut aller dans {}", request.location);
         println!("Le répertoire de base de ce serveur est {}", self.root_directory.clone());
 
+        let mut location_path = "".to_string();
         // Chemin réel du fichier
         let location = self.root_directory.clone() + &request.location;
 
         let discover = fs::read_dir(&location);
+        let mut entries:ReadDir ;
+        let mut  all: Vec<DirectoryElement> = vec![];
+        if !request.location.contains(".") {
+            location_path=   "/index.html".to_string();
+        } else {
+            location_path ="/".to_string() + &*Self::check_and_clean_path(&request.location);
+        };
+        println!("Contenu du répertoire : {:#?}", all);
+        let path = format!("./src/static_files{}", location_path); // Chemin relatif au dossier public
 
-        if discover.is_err() {
-            let output = "RESSOURCE NON TROUVÉE";
-            Self::send_error_response(stream, 404, &output);
+        if !discover.is_err() {
+            entries = discover.unwrap();
+           all = entries
+                .map(|entry| {
+                    let el = entry.unwrap().path();
+                    let name = el.to_str().unwrap().strip_prefix(&location).unwrap().to_string();
+
+                    DirectoryElement {
+                        entry: name.clone(),
+                        link: request.location.clone() + &name,
+                        is_directory: el.is_dir(),
+                    }
+                })
+                .collect::<Vec<DirectoryElement>>();
+            println!("Contenu du répertoire : {:#?}", all);
+            self.handle_listing_directory(&mut stream, &path,all);
             return;
         }
 
-        let entries = discover.unwrap();
-        let all: Vec<DirectoryElement> = entries
-            .map(|entry| {
-                let el = entry.unwrap().path();
-                let name = el.to_str().unwrap().strip_prefix(&location).unwrap().to_string();
 
-                DirectoryElement {
-                    entry: name.clone(),
-                    link: request.location.clone() + &name,
-                    is_directory: el.is_dir(),
-                }
-            })
-            .collect::<Vec<DirectoryElement>>();
 
-        println!("Contenu du répertoire : {:#?}", all);
-
-        let path = "./src/static_files/index.html"; // Chemin vers le fichier statique
+        let path = format!("./src/static_files{}", location_path); // Chemin relatif au dossier public
         println!("if path exist {}", Path::new(&path).exists());
         println!("Chemin vérifié : {}", path);
         if Path::new(&path).exists() {
             // Servir un fichier statique
-            self.handle_static_file(&mut stream, &path, all);
+            self.handle_static_file(&mut stream, &path);
             println!("Handle static function");
         } else {
             // Ressource introuvable
@@ -118,13 +119,47 @@ impl Server {
         }
     }
 
+    fn handle_static_file(&self, stream: &mut TcpStream, path: &str) {
+        // Déterminer le type de contenu en fonction de l'extension du fichier
+        let content_type = match Path::new(path).extension().and_then(|ext| ext.to_str()) {
+            Some("html") => "text/html",
+            Some("css") => "text/css",
+            Some("js") => "application/javascript",
+            Some("png") => "image/png",
+            Some("jpg") | Some("jpeg") => "image/jpeg",
+            Some("gif") => "image/gif",
+            Some("json") => "application/json",
+            _ => "text/plain", // Type par défaut
+        };
+
+        // Lire le fichier
+        match fs::read(path) {
+            Ok(content) => {
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
+                    content_type,
+                    content.len()
+                );
+                if let Err(e) = stream.write_all(response.as_bytes()) {
+                    eprintln!("Erreur lors de l'envoi de l'en-tête : {}", e);
+                }
+                if let Err(e) = stream.write_all(&content) {
+                    eprintln!("Erreur lors de l'envoi du contenu : {}", e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Erreur lors de la lecture du fichier : {}", e);
+                Self::send_error_response(stream, 500, "Internal Server Error");
+            }
+        }
+    }
+
     /// Gère une requête pour un fichier statique.
-    fn handle_static_file(&self, stream: &mut TcpStream, path: &str, all: Vec<DirectoryElement>) {
+    fn handle_listing_directory(&self, stream: &mut TcpStream, path: &str, all: Vec<DirectoryElement>) {
         // Chargement du template
         let tera = Tera::new("src/**/*.html").unwrap();
         let mut context = Context::new();
         context.insert("elements", &all);
-
         match tera.render(&path.strip_prefix("./src/").unwrap(), &context) {
             Ok(content) => {
                 let response = format!(
@@ -156,6 +191,17 @@ impl Server {
             eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
         } else {
             eprintln!("{}", status_message);
+        }
+    }
+    fn check_and_clean_path(path: &str) -> String {
+        // Trouver l'index du motif "images/" ou "css/"
+        if let Some(index) = path.find("images/").or_else(|| path.find("css/")) {
+            // Supprimer tout ce qui se trouve avant le motif
+            let cleaned_path = &path[index..];
+            cleaned_path.to_string()
+        } else {
+            // Retourner le chemin original si aucun motif n'est trouvé
+            path.to_string()
         }
     }
     // pub fn access_log(&self, req: &Request) {
