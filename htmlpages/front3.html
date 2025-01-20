@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interface de téléchargement</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen bg-neutral-50">
+    <div class="relative bg-gradient-to-b from-pink-300 to-gray-300 shadow-lg rounded-lg w-[700px] h-[300px] p-4">
+        <!-- Bouton fermer -->
+        <button class="absolute top-2 right-2 text-gray-700 hover:text-black">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+
+        <div class="flex justify-between h-full p-6 w-[900px] h-[600px]">
+            <!-- Partie gauche - Section upload -->
+
+             <div class="w-1/2 glass-effect bg-white/30 rounded-lg p-4">
+                <div class="flex justify-between max-w-4xl mx-auto">
+                    <div class="flex gap-4">
+                        <label class="block text-gray-700">Name of folder</label>
+                        <input
+                        type="search"
+                        placeholder="Search ..."
+                        class="px-2 py-1 bg-[#472a2a] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff6b6b] placeholder-gray-400"
+                    >
+                    </div>
+    
+                </div>
+                <button class="mt-20 px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mx-auto">
+                    <span>Create folder</span>
+                    <i class="fas fa-upload"></i>
+                </button>
+             </div>
+            <!-- Partie droite - Icône de fichiers -->
+
+            
+            <div class="flex items-center justify-center w-1/2 mr-10 -ml-4">
+                <div class="relative">
+                  
+                    <div class="absolute -right-1 -bottom-1 w-16 h-20 border-2 border-gray-400 rounded-sm bg-white/10"></div>
+                    <div class="absolute -right-2 -bottom-2 w-16 h-20 border-2 border-gray-400 rounded-sm bg-white/10"></div>
+                    <div class="w-16 h-20 border-2 border-gray-400 rounded-sm bg-white/10"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
