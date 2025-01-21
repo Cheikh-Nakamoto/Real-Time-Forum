@@ -1,8 +1,7 @@
 use chrono::{Duration, Utc};
 use mio::net::TcpStream;
 use std::collections::HashMap;
-use std::io;
-use std::io::{BufReader, Read, Write};
+use std::io::{BufReader, Read};
 use uuid::Uuid;
 
 // -------------------------------------------------------------------------------------

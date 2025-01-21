@@ -3,7 +3,6 @@ use std::{ fs, io::Write, path::Path };
 use std::fs::ReadDir;
 pub use std::string::String;
 use mio::net::TcpStream;
-use mio::Token;
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -77,9 +76,9 @@ impl Server {
         let location = "./".to_string() + &root + &request.location;
 
         let discover = fs::read_dir(&location);
-        let mut entries: ReadDir;
+        let entries: ReadDir;
         let mut all: Vec<DirectoryElement> = vec![];
-        let mut dir_path = "".to_string();
+        let mut dir_path = String::new();
         println!(
             "Vérification de l'existence de {} : {}",
             &location,
@@ -128,7 +127,7 @@ impl Server {
                 })
                 .collect::<Vec<DirectoryElement>>();
 
-            self.handle_listing_directory(&mut stream, &path, all, cookie);
+            self.handle_listing_directory(&mut stream, all, cookie);
             return;
         }
 
@@ -197,7 +196,6 @@ impl Server {
     fn handle_listing_directory(
         &self,
         stream: &mut TcpStream,
-        path: &str,
         all: Vec<DirectoryElement>,
         cookie: String
     ) {
