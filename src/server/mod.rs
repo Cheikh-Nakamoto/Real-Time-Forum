@@ -3,6 +3,7 @@ use std::{ fs, io::Write, path::Path };
 use std::fs::ReadDir;
 pub use std::string::String;
 use mio::net::TcpStream;
+use mio::Token;
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -17,6 +18,8 @@ pub mod rendering_page;
 
 pub use cgi::*;
 pub use rendering_page::*;
+
+use crate::{remove_prefix, remove_suffix};
 
 // -------------------------------------------------------------------------------------
 // SERVER
@@ -65,30 +68,40 @@ impl Server {
         }
     }
 
-    pub fn handle_request(&self, mut stream: &mut TcpStream, request: Request) {
-        println!("On veut aller dans {}", request.location);
-        println!("Le répertoire de base de ce serveur est {}", self.root_directory.clone());
-
-        let mut location_path = "".to_string();
+    pub fn handle_request(&self, mut stream: &mut TcpStream, request: Request, cookie: String) {
+        let mut location_path = String::new();
         // Chemin réel du fichier
-        let location = self.root_directory.clone() + &request.location;
+        let mut root = self.root_directory.clone();
+        root = remove_suffix(root, "/");
+
+        let location = "./".to_string() + &root + &request.location;
 
         let discover = fs::read_dir(&location);
         let mut entries: ReadDir;
         let mut all: Vec<DirectoryElement> = vec![];
         let mut dir_path = "".to_string();
+        println!(
+            "Vérification de l'existence de {} : {}",
+            &location,
+            Path::new(&location).exists()
+        );
+
         if !request.location.contains(".") {
+            if !Path::new(&location).exists() {
+                Self::send_error_response(&self, &mut stream, 404, "Not Found");
+            }
             location_path = "/index.html".to_string();
             dir_path = "src/static_files".to_string();
         } else {
             location_path = Self::check_and_clean_path(&request.location);
             dir_path = self.root_directory.clone();
         }
+
         if location_path.contains("/image") || location_path.contains("/css") {
             dir_path = "src/static_files".to_string();
         }
-        println!("Contenu du répertoire : {:#?}", all);
-        let path = format!("./{}{}", dir_path, location_path); // Chemin relatif au dossier public
+
+        let path = format!("./{}/{}", remove_suffix(dir_path, "/"), remove_prefix(location_path, "/")); // Chemin relatif au dossier public
 
         if !discover.is_err() {
             entries = discover.unwrap();
@@ -97,43 +110,40 @@ impl Server {
                     let el = entry.unwrap().path();
                     let name = el.to_str().unwrap().strip_prefix(&location).unwrap().to_string();
 
-                    let mut entry_name = name.clone();
-                    if let Some(val) = entry_name.strip_prefix("/") {
-                        entry_name = val.to_string();
-                    }
+                    let entry_name = remove_prefix(name.clone(), "/");
 
                     DirectoryElement {
                         entry: entry_name.clone(),
                         entry_type: match el.is_dir() {
                             true => "folder".to_string(),
-                            _ => match entry_name.strip_suffix(".rb") {
-                                Some(_) => "ruby".to_string(),
-                                None => "file".to_string()
-                            }
+                            _ =>
+                                match entry_name.strip_suffix(".rb") {
+                                    Some(_) => "ruby".to_string(),
+                                    None => "file".to_string(),
+                                }
                         },
                         link: request.location.clone() + &name,
                         is_directory: el.is_dir(),
                     }
                 })
                 .collect::<Vec<DirectoryElement>>();
-            println!("Contenu du répertoire : {:#?}", all);
-            self.handle_listing_directory(&mut stream, &path, all);
+
+            self.handle_listing_directory(&mut stream, &path, all, cookie);
             return;
         }
-        println!("if path exist {}", Path::new(&path).exists());
-        println!("Chemin vérifié : {}", path);
+
         if Path::new(&path).exists() {
             // Servir un fichier statique
-            self.handle_static_file(&mut stream, &path);
-            println!("Handle static function");
+            self.handle_static_file(&mut stream, &path, cookie);
+            println!("Handle static function. Path: {}", &path);
         } else {
             // Ressource introuvable
-            println!("Handle static function error");
-            Self::send_error_response(&mut stream, 404, "Not Found");
+            println!("Handle static function error. Path: {}", &path);
+            Self::send_error_response(&self, &mut stream, 404, "Not Found");
         }
     }
 
-    fn handle_static_file(&self, stream: &mut TcpStream, path: &str) {
+    fn handle_static_file(&self, stream: &mut TcpStream, path: &str, cookie: String) {
         // Déterminer le type de contenu en fonction de l'extension du fichier
         let mut to_cgi = false;
         let content_type = match
@@ -163,10 +173,12 @@ impl Server {
                 }
 
                 let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
+                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n{}\r\n",
                     content_type,
-                    content.len()
+                    content.len(),
+                    cookie
                 );
+
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de l'en-tête : {}", e);
                 }
@@ -176,7 +188,7 @@ impl Server {
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
-                Self::send_error_response(stream, 500, "Internal Server Error");
+                Self::send_error_response(&self, stream, 500, "Internal Server Error");
             }
         }
     }
@@ -186,45 +198,66 @@ impl Server {
         &self,
         stream: &mut TcpStream,
         path: &str,
-        all: Vec<DirectoryElement>
+        all: Vec<DirectoryElement>,
+        cookie: String
     ) {
         // Chargement du template
         let tera = Tera::new("src/**/*.html").unwrap();
         let mut context = Context::new();
         context.insert("elements", &all);
-        match tera.render(&path.strip_prefix("./src/").unwrap(), &context) {
+        context.insert("hostname", &self.hostname);
+
+        match tera.render(&self.default_file.strip_prefix("src/").unwrap(), &context) {
             Ok(content) => {
                 let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n{}\r\n{}",
                     content.len(),
+                    cookie,
                     content
                 );
+
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
                 }
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
-                Self::send_error_response(stream, 500, "Internal Server Error");
+                Self::send_error_response(&self, stream, 500, "Internal Server Error");
             }
         }
     }
 
     /// Envoie une réponse d'erreur HTTP.
-    fn send_error_response(stream: &mut TcpStream, status_code: u16, status_message: &str) {
-        let response = format!(
-            "HTTP/1.1 {} {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-            status_code,
-            status_message,
-            status_message.len(),
-            status_message
+    fn send_error_response(&self, stream: &mut TcpStream, status_code: u16, status_message: &str) {
+        // Chargement du template
+        let tera = Tera::new("src/**/*.html").unwrap();
+        let mut context = Context::new();
+        context.insert(
+            "error",
+            &(HTMLError { code: status_code, status: status_message.to_string() })
         );
-        if let Err(e) = stream.write_all(response.as_bytes()) {
-            eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
-        } else {
-            eprintln!("{}", status_message);
+
+        match tera.render(&self.error_path.strip_prefix("src/").unwrap(), &context) {
+            Ok(content) => {
+                let response = format!(
+                    "HTTP/1.1 {} {}\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
+                    status_code,
+                    status_message,
+                    content.len(),
+                    content
+                );
+                if let Err(e) = stream.write_all(response.as_bytes()) {
+                    eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
+                } else {
+                    eprintln!("{}", status_message);
+                }
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+            }
         }
     }
+
     fn check_and_clean_path(path: &str) -> String {
         // Trouver l'index du motif "images/" ou "css/"
         if let Some(index) = path.find("/images/").or_else(|| path.find("/css/")) {
