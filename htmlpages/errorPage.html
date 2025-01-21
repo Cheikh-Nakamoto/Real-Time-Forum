@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <title>Error Page</title>
+</head>
+<body>
+
+    <div class="bg-[#6d4141] rounded-lg p-6 max-w-4xl mx-auto mb-6 mt-4">
+        <div class="relative bg-[#6d4141] w-[800px] h-[600px] rounded-lg flex items-center justify-between p-10">
+     
+                <img src="antenna.png" alt="Antenna Icon" class="w-50 h-50">
+                <div class="relative flex items-center gap-2">
+                    <div class="relative">
+                        <i data-lucide="laptop" class="w-60 h-60 text-[#87CEEB]" stroke-width="1"></i>
+                        <span class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-2xl font-bold text-[#87CEEB]">
+                            404
+                        </span>
+                    </div>
+                    <!-- Warning Icon -->
+                    <i data-lucide="alert-triangle" class="w-16 h-16 text-[#FFD700]  mt-12 " stroke-width="1"></i>  
+                </div>
+        </div>
+    </div>
+   
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
