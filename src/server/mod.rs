@@ -67,7 +67,7 @@ impl Server {
     }
 
     pub fn handle_request(&self, mut stream: &mut TcpStream, request: Request,cookie:String) {
-        let mut location_path = "".to_string();
+        let mut location_path = String::new();
         // Chemin réel du fichier
         let location = self.root_directory.clone() + &request.location;
 
@@ -113,7 +113,7 @@ impl Server {
                     }
                 })
                 .collect::<Vec<DirectoryElement>>();
-            println!("Contenu du répertoire : {:#?}", all);
+            
             self.handle_listing_directory(&mut stream, &path, all,cookie);
             return;
         }
@@ -124,7 +124,7 @@ impl Server {
         } else {
             // Ressource introuvable
             println!("Handle static function error");
-            Self::send_error_response(&mut stream, 404, "Not Found");
+            Self::send_error_response(&self, &mut stream, &path, 404, "Not Found");
         }
     }
 
@@ -173,7 +173,7 @@ impl Server {
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
-                Self::send_error_response(stream, 500, "Internal Server Error");
+                Self::send_error_response(&self, stream, &path, 500, "Internal Server Error");
             }
         }
     }
@@ -190,7 +190,9 @@ impl Server {
         let tera = Tera::new("src/**/*.html").unwrap();
         let mut context = Context::new();
         context.insert("elements", &all);
-        match tera.render(&path.strip_prefix("./src/").unwrap(), &context) {
+        context.insert("hostname", &self.hostname);
+        
+        match tera.render(&self.default_file.strip_prefix("src/").unwrap(), &context) {
             Ok(content) => {
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n{}\r\n{}",
@@ -205,24 +207,36 @@ impl Server {
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
-                Self::send_error_response(stream, 500, "Internal Server Error");
+                Self::send_error_response(&self, stream, &path, 500, "Internal Server Error");
             }
         }
     }
 
     /// Envoie une réponse d'erreur HTTP.
-    fn send_error_response(stream: &mut TcpStream, status_code: u16, status_message: &str) {
-        let response = format!(
-            "HTTP/1.1 {} {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-            status_code,
-            status_message,
-            status_message.len(),
-            status_message
-        );
-        if let Err(e) = stream.write_all(response.as_bytes()) {
-            eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
-        } else {
-            eprintln!("{}", status_message);
+    fn send_error_response(&self, stream: &mut TcpStream, path: &str, status_code: u16, status_message: &str) {
+        // Chargement du template
+        let tera = Tera::new("src/**/*.html").unwrap();
+        let mut context = Context::new();
+        context.insert("error", &HTMLError{code: status_code, status: status_message.to_string()});
+
+        match tera.render(&self.error_path.strip_prefix("src/").unwrap(), &context) {
+            Ok(content) => {
+                let response = format!(
+                    "HTTP/1.1 {} {}\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
+                    status_code,
+                    status_message,
+                    content.len(),
+                    content
+                );
+                if let Err(e) = stream.write_all(response.as_bytes()) {
+                    eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
+                } else {
+                    eprintln!("{}", status_message);
+                }
+            },
+            Err(e) => {
+                eprintln!("{}", e);
+            }
         }
     }
 

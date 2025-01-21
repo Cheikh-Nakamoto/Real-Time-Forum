@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Localhost File Manager</title>
+    <title>{{hostname}}</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -13,8 +13,9 @@
     <div class="bg-[#6d4141] rounded-lg p-6 w-screen h-screen flex flex-col justify-between gap-4">
         <!-- Logo -->
         <div class="text-center m-auto flex-none">
-            <div class="h-auto mx-auto">
+            <div class="h-auto mx-auto flex flex-col">
                 <img src="images/logo.png" width="120" alt="">
+                <span class="text-white uppercase font-bold tracking-wide">{{hostname}}</span>
             </div>
         </div>
         
