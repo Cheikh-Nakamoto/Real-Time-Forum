@@ -1,6 +1,5 @@
 pub mod server;
 use std::{ collections::HashMap, fs };
-use serde::Deserialize;
 
 pub use server::*;
 
