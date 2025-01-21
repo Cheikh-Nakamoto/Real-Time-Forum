@@ -47,3 +47,17 @@ pub fn load_config() -> Config {
     let content = fs::read_to_string("src/config.toml").unwrap_or(String::new());
     toml::from_str(&content).unwrap()
 }
+
+pub fn remove_suffix(str: String, suffix: &str) -> String {
+    match str.strip_suffix(suffix) {
+        Some(txt) => txt.to_string(),
+        None => str,
+    }
+}
+
+pub fn remove_prefix(str: String, prefix: &str) -> String {
+    match str.strip_prefix(prefix) {
+        Some(txt) => txt.to_string(),
+        None => str,
+    }
+}
