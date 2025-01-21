@@ -3,6 +3,7 @@ use std::{ fs, io::Write, path::Path };
 use std::fs::ReadDir;
 pub use std::string::String;
 use mio::net::TcpStream;
+use mio::Token;
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -65,10 +66,7 @@ impl Server {
         }
     }
 
-    pub fn handle_request(&self, mut stream: &mut TcpStream, request: Request) {
-        println!("On veut aller dans {}", request.location);
-        println!("Le répertoire de base de ce serveur est {}", self.root_directory.clone());
-
+    pub fn handle_request(&self, mut stream: &mut TcpStream, request: Request,cookie:String) {
         let mut location_path = "".to_string();
         // Chemin réel du fichier
         let location = self.root_directory.clone() + &request.location;
@@ -87,7 +85,6 @@ impl Server {
         if location_path.contains("/image") || location_path.contains("/css") {
             dir_path = "src/static_files".to_string();
         }
-        println!("Contenu du répertoire : {:#?}", all);
         let path = format!("./{}{}", dir_path, location_path); // Chemin relatif au dossier public
 
         if !discover.is_err() {
@@ -117,14 +114,12 @@ impl Server {
                 })
                 .collect::<Vec<DirectoryElement>>();
             println!("Contenu du répertoire : {:#?}", all);
-            self.handle_listing_directory(&mut stream, &path, all);
+            self.handle_listing_directory(&mut stream, &path, all,cookie);
             return;
         }
-        println!("if path exist {}", Path::new(&path).exists());
-        println!("Chemin vérifié : {}", path);
         if Path::new(&path).exists() {
             // Servir un fichier statique
-            self.handle_static_file(&mut stream, &path);
+            self.handle_static_file(&mut stream, &path,cookie);
             println!("Handle static function");
         } else {
             // Ressource introuvable
@@ -133,7 +128,7 @@ impl Server {
         }
     }
 
-    fn handle_static_file(&self, stream: &mut TcpStream, path: &str) {
+    fn handle_static_file(&self, stream: &mut TcpStream, path: &str,cookie:String) {
         // Déterminer le type de contenu en fonction de l'extension du fichier
         let mut to_cgi = false;
         let content_type = match
@@ -163,10 +158,12 @@ impl Server {
                 }
 
                 let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\r\n",
+                    "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n{}\r\n",
                     content_type,
-                    content.len()
+                    content.len(),
+                    cookie
                 );
+
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de l'en-tête : {}", e);
                 }
@@ -186,7 +183,8 @@ impl Server {
         &self,
         stream: &mut TcpStream,
         path: &str,
-        all: Vec<DirectoryElement>
+        all: Vec<DirectoryElement>,
+        cookie :String
     ) {
         // Chargement du template
         let tera = Tera::new("src/**/*.html").unwrap();
@@ -195,10 +193,12 @@ impl Server {
         match tera.render(&path.strip_prefix("./src/").unwrap(), &context) {
             Ok(content) => {
                 let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{}",
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n{}\r\n{}",
                     content.len(),
+                    cookie,
                     content
                 );
+
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
                 }
@@ -225,6 +225,8 @@ impl Server {
             eprintln!("{}", status_message);
         }
     }
+
+
     fn check_and_clean_path(path: &str) -> String {
         // Trouver l'index du motif "images/" ou "css/"
         if let Some(index) = path.find("/images/").or_else(|| path.find("/css/")) {

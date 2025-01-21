@@ -14,7 +14,7 @@ const CLIENT_START: Token = Token(1000); // Token de départ pour les clients
 #[derive(Debug)]
 pub struct Router {
     pub servers: Vec<Server>,
-    pub sessions: Vec<Session>,
+    pub sessions: HashMap<Token, Session>,
     pub listeners: HashMap<Token, TcpListener>, // Associe un token à un TcpListener
     pub clients: HashMap<Token, TcpStream>,     // Associe un token à un TcpStream
     pub next_token: usize,
@@ -24,7 +24,7 @@ impl Router {
     pub fn new() -> Self {
         Self {
             servers: vec![],
-            sessions: vec![],
+            sessions: HashMap::new(),
             listeners: HashMap::new(),
             clients: HashMap::new(),
             next_token: CLIENT_START.0,
@@ -74,17 +74,6 @@ impl Router {
 
         Ok(())
     }
-
-    pub fn add_session(&mut self, session: Session) {
-        self.sessions.push(session);
-    }
-    pub fn remove_session(mut self, session_id: String) {
-        self.sessions = self
-            .sessions
-            .into_iter()
-            .filter(|s| s.id != session_id)
-            .collect();
-    }
     /// Démarre le Router et commence à écouter les événements.
     pub fn run(&mut self) -> io::Result<()> {
         let mut poll = Poll::new()?;
@@ -103,17 +92,25 @@ impl Router {
 
             for event in events.iter() {
                 if let Some(&addr) = server_tokens.get(&event.token()) {
+
                     // Nouvelle connexion sur un TcpListener
                     self.accept_connection(event.token(), &poll)?;
                     println!("Nouvelle connexion sur le port {}", addr.port());
                 } else {
                     // Données reçues sur un TcpStream
-                    println!("voila le token {:?}", event.token());
                     let stream = (self.clients.get_mut(&event.token()))
                         .expect("Erreur lors de la recupeartion du canal tcpstream");
                     let req = Request::read_request(stream, event.token());
                     println!("voila la requete {:?}", req);
-                    Self::route_request(self.servers.clone(), &req, stream);
+                    let mut cookie = String::new();
+                    println!("<=========================================>");
+                    println!("all session : {:?}",self.sessions);
+                    println!("<=========================================>");
+
+                    if let Some(session) = self.sessions.get_mut(&event.token()) {
+                        cookie = Session::make_cookie("cookie_01", &*session.id,session.expiration_time);
+                    }
+                        Self::route_request(self.servers.clone(), &req, stream,cookie);
                 }
             }
         }
@@ -124,6 +121,22 @@ impl Router {
         if let Some(listener) = self.listeners.get_mut(&token) {
             let (mut stream, _) = listener.accept()?;
             let client_token = Token(self.next_token);
+            if let Some(cookie) =  Session::get_cookie_from_stream(&mut stream, "cookie_01"){
+                for (old_token, session) in self.sessions.clone().iter() {
+                    if session.id == cookie && !session.is_expired() {
+                        let mut new_session = session.clone();
+                        new_session.expiration_time = Session::SESSION_LIFETIME;
+                        self.sessions.remove(&old_token);
+                        self.sessions.insert(client_token.clone(), new_session);
+                        println!("Connexion retablie avec le clien{:?} associé au nouveau token{:?}", old_token, client_token);
+                    }
+                }
+            }else{
+                let new_session = Session::new();
+                self.sessions.insert(client_token.clone(), new_session.clone());
+               //Session::send_cookie(&mut stream, "cookie_01", &*new_session.id, 1000);
+                println!("Connexion etablie avec le nouveau client associé token{:?}",token);
+            }
             self.next_token += 1;
             poll.registry()
                 .register(&mut stream, client_token, Interest::READABLE)?;
@@ -133,17 +146,20 @@ impl Router {
         Ok(())
     }
 
+
+
     /// Gère les données d'un client existant.
     //fn handle_client(&mut self, token: Token) {}
 
     // Route une requête HTTP et génère une réponse.
-    pub fn route_request(servers: Vec<Server>, req: &Request, stream: &mut TcpStream) {
+    pub fn route_request(servers: Vec<Server>, req: &Request, stream: &mut TcpStream,cookie:String) {
         // On récupère le hostname, l'adresse ip et le port de la requête
         // On parcoure la liste des serveurs et on vérifie lequel a le hostname, le port et l'ip correspondant
         for server in servers.into_iter() {
             if server.ip_addr == req.host && server.ports.contains(&req.port) {
                 println!("{} la resoudre", server.ip_addr);
-                server.handle_request(stream, req.clone());
+
+                server.handle_request(stream, req.clone(),cookie.clone());
             }
         }
     }
