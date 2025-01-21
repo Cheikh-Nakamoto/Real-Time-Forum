@@ -19,7 +19,7 @@ impl CGI {
         input.arg(filename);
         let res = input.output();
 
-        let output = if res.is_ok() {
+        if res.is_ok() {
             let check_txt = String::from_utf8(res.unwrap().stdout);
             if check_txt.is_ok() {
                 check_txt.unwrap()
@@ -28,9 +28,7 @@ impl CGI {
             }
         } else {
             String::new()
-        };
-
-        output
+        }
     }
 }
 // -------------------------------------------------------------------------------------
