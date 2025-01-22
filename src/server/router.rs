@@ -40,7 +40,7 @@ impl Router {
                 .ok_or_else(|| {
                     io::Error::new(io::ErrorKind::Other, "Impossible de résoudre l'adresse")
                 })?;
-                println!("Adresse de connexion {}",addr);
+            println!("Adresse de connexion {}", addr);
             let listener = TcpListener::bind(addr)?;
             let token = Token(self.next_token - 1000);
             self.next_token += 1;
@@ -92,7 +92,6 @@ impl Router {
 
             for event in events.iter() {
                 if let Some(&addr) = server_tokens.get(&event.token()) {
-
                     // Nouvelle connexion sur un TcpListener
                     self.accept_connection(event.token(), &poll)?;
                     println!("Nouvelle connexion sur le port {}", addr.port());
@@ -102,15 +101,64 @@ impl Router {
                         .expect("Erreur lors de la recupeartion du canal tcpstream");
                     let req = Request::read_request(stream, event.token());
                     println!("voila la requete {:?}", req);
-                    let mut cookie = String::new();
-                    println!("<=========================================>");
-                    println!("all session : {:?}",self.sessions);
-                    println!("<=========================================>");
+                    let mut cookie = req.id_session.clone();
+                    let client_token = Token(self.next_token);
+                    self.next_token += 1;
+                    // Tentative de récupération du cookie
+                    if !cookie.is_empty() {
+                        // Recherche d'une session existante avec le même cookie
+                        let mut session_found = false;
 
-                    if let Some(session) = self.sessions.get_mut(&event.token()) {
-                        cookie = Session::make_cookie("cookie_01", &*session.id,session.expiration_time);
+                        for (old_token, session) in self.sessions.clone().iter() {
+                            if session.id == cookie && !session.is_expired() {
+                                let mut new_session = Session::new();
+                                new_session.id = session.id.clone();
+                                self.sessions.remove(&old_token);
+                                self.sessions.insert(client_token.clone(), new_session);
+                                println!("Update de la session client {:?} associé au nouveau token {:?}", old_token, client_token);
+                                session_found = true;
+                                break;
+                            } else if session.id == cookie && session.is_expired() {
+                                let mut new_session = Session::new();
+                                new_session.id = session.id.clone();
+                                self.sessions.remove(&old_token);
+                                self.sessions.insert(client_token.clone(), new_session);
+                                println!("Creation d'une nouvelle session client {:?} associé au nouveau token {:?} dont la session precedente a expiere", old_token, client_token);
+                                session_found = true;
+                                break;
+                            }
+                        }
+
+                        if !session_found {
+                            // Si aucune session existante n'est trouvée, créez une nouvelle session
+                            let new_session = Session::new();
+                            self.sessions
+                                .insert(client_token.clone(), new_session.clone());
+                            println!(
+                                "Nouvelle session créée pour le client avec le token {:?}",
+                                client_token
+                            );
+                        }
+                    } else {
+                        // Si aucun cookie n'est trouvé, créez une nouvelle session
+                        let new_session = Session::new();
+                        self.sessions
+                            .insert(client_token.clone(), new_session.clone());
+                        println!(
+                            "Nouvelle session créée pour le client avec le token {:?}",
+                            client_token
+                        );
                     }
-                        Self::route_request(self.servers.clone(), &req, stream,cookie);
+
+                    if let Some(session) = self.sessions.get_mut(&client_token) {
+                        cookie = Session::make_cookie(
+                            "cookie_01",
+                            &*session.id,
+                            session.expiration_time,
+                        );
+                    }
+                    //println!("All session : {:?}", self.sessions);
+                    Self::route_request(self.servers.clone(), &req, stream, cookie);
                 }
             }
         }
@@ -121,45 +169,26 @@ impl Router {
         if let Some(listener) = self.listeners.get_mut(&token) {
             let (mut stream, _) = listener.accept()?;
             let client_token = Token(self.next_token);
-            if let Some(cookie) =  Session::get_cookie_from_stream(&mut stream, "cookie_01"){
-                for (old_token, session) in self.sessions.clone().iter() {
-                    if session.id == cookie && !session.is_expired() {
-                        let mut new_session = session.clone();
-                        new_session.expiration_time = Session::SESSION_LIFETIME;
-                        self.sessions.remove(&old_token);
-                        self.sessions.insert(client_token.clone(), new_session);
-                        println!("Connexion retablie avec le clien{:?} associé au nouveau token{:?}", old_token, client_token);
-                    }
-                }
-            }else{
-                let new_session = Session::new();
-                self.sessions.insert(client_token.clone(), new_session.clone());
-               //Session::send_cookie(&mut stream, "cookie_01", &*new_session.id, 1000);
-                println!("Connexion etablie avec le nouveau client associé token{:?}",token);
-            }
             self.next_token += 1;
             poll.registry()
                 .register(&mut stream, client_token, Interest::READABLE)?;
             self.clients.insert(client_token, stream);
-            println!("Nouveau client connecté avec le token: {:?}", client_token);
         }
         Ok(())
     }
 
-
-
-    /// Gère les données d'un client existant.
-    //fn handle_client(&mut self, token: Token) {}
-
     // Route une requête HTTP et génère une réponse.
-    pub fn route_request(servers: Vec<Server>, req: &Request, stream: &mut TcpStream,cookie:String) {
+    pub fn route_request(
+        servers: Vec<Server>,
+        req: &Request,
+        stream: &mut TcpStream,
+        cookie: String,
+    ) {
         // On récupère le hostname, l'adresse ip et le port de la requête
         // On parcoure la liste des serveurs et on vérifie lequel a le hostname, le port et l'ip correspondant
         for server in servers.into_iter() {
             if server.ip_addr == req.host && server.ports.contains(&req.port) {
-                println!("{} la resoudre", server.ip_addr);
-
-                server.handle_request(stream, req.clone(),cookie.clone());
+                server.handle_request(stream, req.clone(), cookie.clone());
             }
         }
     }

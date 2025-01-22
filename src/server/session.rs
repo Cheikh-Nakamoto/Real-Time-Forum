@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use mio::net::TcpStream;
 use std::collections::HashMap;
 use std::io::{BufReader, Read};
@@ -10,22 +10,28 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct Session {
     pub id: String,
+    pub validity_time: DateTime<Utc>,
     pub expiration_time: i64,
 }
 
 impl Session {
     pub fn new() -> Self {
+        let expires_duration = Duration::milliseconds(Self::SESSION_LIFETIME);
+
         Self {
             id: Uuid::new_v4().into(),
-            expiration_time: Self::SESSION_LIFETIME,
+            expiration_time:Self::SESSION_LIFETIME,
+            validity_time:Utc::now() + expires_duration,
         }
     }
-    pub(crate) const SESSION_LIFETIME: i64 = 60 * 60 * 1000;
+    pub(crate) const SESSION_LIFETIME: i64 = 60 * 60 * (1000/16);
 
 
     pub fn is_expired(&self) -> bool {
-        self.expiration_time < Utc::now().timestamp_millis()
+        Utc::now() > self.validity_time
     }
+
+
 
     /// Récupère la valeur d'un cookie spécifique à partir d'un TcpStream.
     pub fn get_cookie_from_stream(stream: &mut TcpStream, cookie_name: &str) -> Option<String> {

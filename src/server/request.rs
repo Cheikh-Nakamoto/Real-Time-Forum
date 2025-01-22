@@ -1,7 +1,6 @@
 use std::io::{Read};
 
 use mio::{net::TcpStream, Token};
-use uuid::Uuid;
 
 // -------------------------------------------------------------------------------------
 // REQUEST
@@ -81,6 +80,9 @@ impl Request {
             }
         }
 
+        // Extraire les cookies des en-têtes
+        let cookies = Self::extract_cookies(&lines);
+
         // Parser le corps de la requête (s'il existe)
         let mut is_body = false;
         for line in lines.iter().skip(1) {
@@ -97,13 +99,31 @@ impl Request {
 
         // Créer une instance de `Request`
         Request::new(
-            Uuid::new_v4().to_string(),
+            cookies,
             location,
             host,
             port,
             method,
             body,
         )
+    }
+
+    fn extract_cookies(headers: &[&str]) -> String {
+        let mut cookies = String::new();
+
+        for line in headers {
+            if line.starts_with("Cookie:") {
+                let cookie_str = line.trim_start_matches("Cookie:").trim();
+                for cookie in cookie_str.split(';') {
+                    let mut parts = cookie.trim().splitn(2, '=');
+                    if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
+                        cookies= value.to_string();
+                    }
+                }
+            }
+        }
+
+        cookies
     }
 }
 // -------------------------------------------------------------------------------------
