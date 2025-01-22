@@ -1,59 +1,156 @@
 <!DOCTYPE html>
 <html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{hostname}}</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="min-h-screen flex">
-   
+  </head>
+  <body class="h-screen flex">
+    <div
+      class="bg-[#6d4141] rounded-lg p-6 w-screen h-screen flex flex-col justify-between gap-4"
+    >
+      <!-- Logo -->
+      <div class="text-center m-auto flex-none">
+        <div class="h-auto mx-auto flex flex-col">
+          <img src="images/logo.png" width="120" alt="" />
+          <span class="text-white uppercase font-bold tracking-wide"
+            >{{hostname}}</span
+          >
+        </div>
+      </div>
 
-    <div class="bg-[#6d4141] rounded-lg p-6 w-screen h-screen flex flex-col justify-between gap-4">
-        <!-- Logo -->
-        <div class="text-center m-auto flex-none">
-            <div class="h-auto mx-auto flex flex-col">
-                <img src="images/logo.png" width="120" alt="">
-                <span class="text-white uppercase font-bold tracking-wide">{{hostname}}</span>
-            </div>
+      <div class="bg-[#8a6868] rounded-lg p-6 min-w-4xl mx-auto grow">
+        <div
+          class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-4 overflow-auto"
+        >
+          <!-- File Items -->
+          {% for el in elements %}
+          <div class="relative group">
+            <a
+              href="{{el.link}}"
+              class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors"
+            >
+              {% if el.is_directory %}
+              <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+              {% elif el.entry_type == "ruby" %}
+              <i class="fas fa-gem text-4xl text-red-500 mb-2"></i>
+              {% else %}
+              <i class="fas fa-file text-4xl text-gray-200 mb-2"></i>
+              {% endif %}
+              <span class="text-white text-sm">{{el.entry}}</span>
+              <button
+                class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible"
+              >
+                <i class="fas fa-times text-white text-sm"></i>
+              </button>
+            </a>
+          </div>
+          {% endfor %}
         </div>
-        
-        <div class="bg-[#8a6868] rounded-lg p-6 min-w-4xl mx-auto grow">
-            <div class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-4 overflow-auto">
-                <!-- File Items -->
-                {% for el in elements %}
-                <div class="relative group">
-                    <a href="{{el.link}}" class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors">
-                        {% if el.is_directory %}
-                        <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
-                        {% elif el.entry_type == "ruby" %}
-                        <i class="fas fa-gem text-4xl text-red-500 mb-2"></i>
-                        {% else %}
-                        <i class="fas fa-file text-4xl text-gray-200 mb-2"></i>
-                        {% endif %}
-                        <span class="text-white text-sm">{{el.entry}}</span>
-                        <button class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible">
-                            <i class="fas fa-times text-white text-sm"></i>
-                        </button>
-                    </a>
-                </div>                
-                {% endfor %}
-            </div>
-        </div>
-          <!-- Bottom Actions -->
-        <div class="flex flex-row justify-between w-full justify-self-end">
-            <button class="flex items-center gap-2 px-4 py-2 bg-[#6d4141] text-white rounded-lg hover:bg-[#5d3737] transition-colors">
-                <i class="fas fa-plus"></i>
-                Add file
-            </button>
-            <button class="flex items-center gap-2 px-4 py-2 bg-[#6d4141] text-white rounded-lg hover:bg-[#5d3737] transition-colors">
-                <i class="fas fa-plus"></i>
-                Create folder
-            </button>
-        </div>
+      </div>
+      <!-- Bottom Actions -->
+      <div class="flex flex-row justify-between w-full justify-self-end">
+        <button
+          id="add-file"
+          class="flex items-center gap-2 px-4 py-2 bg-[#6d4141] text-white rounded-lg hover:bg-[#5d3737] transition-colors"
+        >
+          <i class="fas fa-plus"></i>
+          Add file
+        </button>
+        <button
+          id="create-folder"
+          class="flex items-center gap-2 px-4 py-2 bg-[#6d4141] text-white rounded-lg hover:bg-[#5d3737] transition-colors"
+        >
+          <i class="fas fa-plus"></i>
+          Create folder
+        </button>
+      </div>
     </div>
 
-  
-</body>
+    <div
+      id="modal-container"
+      class="fixed flex flex-col w-screen h-screen transition-all duration-500 bg-black/30 backdrop-blur-sm hidden opacity-0"
+    ></div>
+
+    <script>
+      let createFolderHTML = `
+        <div class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
+            <div class="flex justify-between mx-auto">
+                <div class="flex flex-col gap-1">
+                    <label class="block text-black text-sm font-medium tracking-wider">Folder name</label>
+                    <input
+                    type="text"
+                    placeholder="Folder xyz..."
+                    class="w-auto h-10 px-2 py-1 bg-[#472a2a] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-300 placeholder-gray-400"
+                >
+                </div>
+
+            </div>
+            <button class="w-auto px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto">
+                <span class="tracking-wider font-bold">Create folder</span>
+                <i class="fas fa-upload"></i>
+            </button>
+            <span id="close-modal" class="absolute -top-3 -right-2 bg-black hover:bg-red-500 text-white w-6 cursor-pointer rounded-full text-center transition-all duration-200">&times;</span>
+        </div>
+        `;
+      let addFileHTML = `
+        <div class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
+            <div class="flex justify-between mx-auto">
+                <div class="flex flex-col gap-1">
+                    <label class="block text-black text-sm font-medium tracking-wider">Folder name</label>
+                    <input
+                    type="text"
+                    placeholder="Folder xyz..."
+                    class="w-auto h-10 px-2 py-1 bg-[#472a2a] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-300 placeholder-gray-400"
+                >
+                </div>
+
+            </div>
+            <button class="w-auto px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto">
+                <span class="tracking-wider font-bold">Create folder</span>
+                <i class="fas fa-upload"></i>
+            </button>
+            <span id="close-modal" class="absolute -top-3 -right-2 bg-black hover:bg-red-500 text-white w-6 cursor-pointer rounded-full text-center transition-all duration-200">&times;</span>
+        </div>
+        `;
+      let modalContainer = document.querySelector("#modal-container");
+      
+      document.querySelector("#add-file").onclick = () => {
+        openModal("add-file");
+      };
+      document.querySelector("#create-folder").onclick = () => {
+        openModal("create-folder");
+      };
+
+      modalContainer.addEventListener("click", (e) => {
+        if (e.target === modalContainer) {
+          closeModal();
+        }
+      });
+
+      function openModal(action) {
+        if (action === "add-file") {
+          modalContainer.innerHTML = addFileHTML;
+        } else {
+          modalContainer.innerHTML = createFolderHTML;
+        }
+        modalContainer.classList.remove("hidden");
+        setTimeout(() => {
+          modalContainer.classList.add("opacity-100");
+          document.querySelector("#close-modal").onclick = () => {
+            closeModal();
+          };
+        }, 1);
+      }
+      function closeModal() {
+        modalContainer.classList.remove("opacity-100");
+        setTimeout(() => {
+          modalContainer.classList.add("hidden");
+          modalContainer.innerHTML = "";
+        }, 500);
+      }
+    </script>
+  </body>
 </html>
