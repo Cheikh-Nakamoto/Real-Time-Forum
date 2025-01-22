@@ -1,3 +1,5 @@
+use crate::Config;
+
 use super::Request;
 pub use super::{Server, Session};
 use mio::net::{TcpListener, TcpStream};
@@ -75,7 +77,7 @@ impl Router {
         Ok(())
     }
     /// Démarre le Router et commence à écouter les événements.
-    pub fn run(&mut self) -> io::Result<()> {
+    pub fn run(&mut self, config: &Config) -> io::Result<()> {
         let mut poll = Poll::new()?;
         let mut server_tokens = HashMap::new();
 
@@ -158,7 +160,7 @@ impl Router {
                         );
                     }
                     //println!("All session : {:?}", self.sessions);
-                    Self::route_request(self.servers.clone(), &req, stream, cookie);
+                    Self::route_request(self.servers.clone(), &req, stream, cookie, &config);
                 }
             }
         }
@@ -183,12 +185,13 @@ impl Router {
         req: &Request,
         stream: &mut TcpStream,
         cookie: String,
+        config: &Config
     ) {
         // On récupère le hostname, l'adresse ip et le port de la requête
         // On parcoure la liste des serveurs et on vérifie lequel a le hostname, le port et l'ip correspondant
         for server in servers.into_iter() {
             if server.ip_addr == req.host && server.ports.contains(&req.port) {
-                server.handle_request(stream, req.clone(), cookie.clone());
+                server.handle_request(stream, req.clone(), cookie.clone(), config);
             }
         }
     }

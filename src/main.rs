@@ -8,13 +8,12 @@ fn main() -> std::io::Result<()> {
     let mut router = Router::new();
 
     // Ajouter les serveurs au routeur
-    for (_, s) in config.http.servers {
-        router.add_server(s)?;        
+    for (_, s) in &config.http.servers {
+        router.add_server(s.clone())?;        
     }
     // Démarre le routeur
     println!("Serveur en écoute sur les ports 8080 et 8081...");
-    router.run()?;
-    println!("3");
+    router.run(&config)?;
 
     Ok(())
 }

@@ -4,7 +4,7 @@ access_log = "src/logs/access.log"
 events_limit = 128
 
 [http]
-access_log_format = "$remote_addr - $remote_user [$time_local] - $method - $status $bytes_sent"
+access_log_format = "{{remote_addr}} - {{remote_user}} [{{time_local}}] - {{method}} ({{status}}) - {{bytes_sent}} kb"
 timeout = 3000 # seconds
 size_limit = 5000 # kb
 

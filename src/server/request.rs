@@ -1,4 +1,4 @@
-use std::io::{Read};
+use std::io::Read;
 
 use mio::{net::TcpStream, Token};
 
@@ -12,6 +12,7 @@ pub struct Request {
     pub host: String,
     pub port: u16,
     pub method: String,
+    pub bytes: usize,
     pub body: String,
 }
 
@@ -22,6 +23,7 @@ impl Request {
         host: String,
         port: u16,
         method: String,
+        bytes: usize,
         body: String,
     ) -> Self {
         Self {
@@ -30,6 +32,7 @@ impl Request {
             host,
             port,
             method,
+            bytes,
             body,
         }
     }
@@ -52,10 +55,10 @@ impl Request {
 
         // Parser la requête HTTP pour créer une instance de `Request`
         // On utilise `catch_unwind` pour capturer les paniques de `parse_http_request`
-        Request::parse_http_request(&request_str)
+        Request::parse_http_request(&request_str, n)
     }
     /// Parse une requête HTTP et crée une instance de `Request`.
-    pub fn parse_http_request(request_str: &str) -> Self {
+    pub fn parse_http_request(request_str: &str, n: usize) -> Self {
         let mut location = String::new();
         let mut host = String::new();
         let mut port: u16 = 0;
@@ -104,6 +107,7 @@ impl Request {
             host,
             port,
             method,
+            n,
             body,
         )
     }
@@ -116,7 +120,7 @@ impl Request {
                 let cookie_str = line.trim_start_matches("Cookie:").trim();
                 for cookie in cookie_str.split(';') {
                     let mut parts = cookie.trim().splitn(2, '=');
-                    if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
+                    if let (Some(_), Some(value)) = (parts.next(), parts.next()) {
                         cookies= value.to_string();
                     }
                 }
