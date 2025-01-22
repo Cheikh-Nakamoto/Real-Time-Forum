@@ -21,6 +21,11 @@ cgi_file_format = ".py"
 upload_limit = 5000
 accepted_methods = ["GET"]
 directory_listing = true
+redirections = [
+    { source = "/mouton", target = "/" },
+    { source = "/chevre", target = "/" },
+]
+exclusion = ["\\.*"]
 
 [http.servers.server2]
 ip_addr = "127.0.0.10"
@@ -33,3 +38,8 @@ cgi_file_format = ".py"
 upload_limit = 5000
 accepted_methods = ["GET", "POST"]
 directory_listing = false
+redirections = [
+    { source = "/mouton", target = "/" },
+    { source = "/chevre", target = "/" },
+]
+exclusion = [".rb"]

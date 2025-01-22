@@ -19,7 +19,7 @@ pub mod rendering_page;
 pub use cgi::*;
 pub use rendering_page::*;
 
-use crate::{ remove_prefix, remove_suffix, Config };
+use crate::{ remove_prefix, remove_suffix, Config, Redirection };
 
 // -------------------------------------------------------------------------------------
 // SERVER
@@ -36,6 +36,8 @@ pub struct Server {
     pub upload_limit: u32,
     pub accepted_methods: Vec<String>,
     pub directory_listing: bool,
+    pub redirections: Vec<Redirection>,
+    pub exclusion: Vec<String>
 }
 
 impl Server {
@@ -49,7 +51,9 @@ impl Server {
         cgi_file_format: String,
         upload_limit: u32,
         accepted_methods: Vec<String>,
-        directory_listing: bool
+        directory_listing: bool,
+        redirections: Vec<Redirection>,
+        exclusion: Vec<String>,
     ) -> Self {
         Self {
             ip_addr,
@@ -62,6 +66,8 @@ impl Server {
             upload_limit,
             accepted_methods,
             directory_listing,
+            redirections,
+            exclusion
         }
     }
 
@@ -125,8 +131,6 @@ impl Server {
             );
             return;
         }
-
-
 
         let location_path;
         // Chemin réel du fichier

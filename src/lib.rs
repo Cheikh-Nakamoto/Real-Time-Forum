@@ -42,6 +42,12 @@ pub struct HttpConfig {
     pub servers: HashMap<String, Server>,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct Redirection {
+    pub source: String,
+    pub target: String
+}
+
 pub fn load_config() -> Config {
     let content = fs::read_to_string("src/config.toml").unwrap_or(String::new());
     toml::from_str(&content).unwrap()
