@@ -76,7 +76,7 @@
 
     <script>
       let createFolderHTML = `
-        <div class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
+        <form method="POST" class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
             <div class="flex justify-between mx-auto">
                 <div class="flex flex-col gap-1">
                     <label class="block text-black text-sm font-medium tracking-wider">Folder name</label>
@@ -88,35 +88,33 @@
                 </div>
 
             </div>
-            <button class="w-auto px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto">
-                <span class="tracking-wider font-bold">Create folder</span>
-                <i class="fas fa-upload"></i>
+            <button type="submit" class="w-auto px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto mt-2">
+                <span class="tracking-wider font-bold">Valider</span>
+                <i class="fas fa-circle-check"></i>
             </button>
             <span id="close-modal" class="absolute -top-3 -right-2 bg-black hover:bg-red-500 text-white w-6 cursor-pointer rounded-full text-center transition-all duration-200">&times;</span>
-        </div>
+        </form>
         `;
       let addFileHTML = `
-        <div class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
-            <div class="flex justify-between mx-auto">
-                <div class="flex flex-col gap-1">
-                    <label class="block text-black text-sm font-medium tracking-wider">Folder name</label>
-                    <input
-                    type="text"
-                    placeholder="Folder xyz..."
-                    class="w-auto h-10 px-2 py-1 bg-[#472a2a] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-300 placeholder-gray-400"
-                >
-                </div>
-
-            </div>
-            <button class="w-auto px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto">
-                <span class="tracking-wider font-bold">Create folder</span>
+        <form method="POST" class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
+            <label class="block text-black text-sm font-medium tracking-wider">Upload the file</label>
+            <label for="add_file" class="w-auto px-6 py-2 bg-slate-300 text-black rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto">
+                <span class="tracking-wider font-bold">Select file</span>
                 <i class="fas fa-upload"></i>
+            </label>
+            <input id="add_file" type="file" hidden>
+            <span id="selected-file" class="hidden"></span>
+
+            <button type="submit" class="w-auto px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto mt-2">
+                <span class="tracking-wider font-bold">Valider</span>
+                <i class="fas fa-circle-check"></i>
             </button>
+
             <span id="close-modal" class="absolute -top-3 -right-2 bg-black hover:bg-red-500 text-white w-6 cursor-pointer rounded-full text-center transition-all duration-200">&times;</span>
-        </div>
+        </form>
         `;
       let modalContainer = document.querySelector("#modal-container");
-      
+
       document.querySelector("#add-file").onclick = () => {
         openModal("add-file");
       };
@@ -133,6 +131,11 @@
       function openModal(action) {
         if (action === "add-file") {
           modalContainer.innerHTML = addFileHTML;
+          document.querySelector("#add_file").onchange = (e) => {
+            document.querySelector("#selected-file").textContent =
+              e.target.value;
+            document.querySelector("#selected-file").classList.remove("hidden");
+          };
         } else {
           modalContainer.innerHTML = createFolderHTML;
         }
