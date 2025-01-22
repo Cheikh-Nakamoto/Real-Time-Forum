@@ -1,7 +1,6 @@
 pub mod request;
-use std::io::Read;
 use std::{ fs, io::Write, path::Path };
-use std::fs::{ File, OpenOptions, ReadDir };
+use std::fs::{ OpenOptions, ReadDir };
 pub use std::string::String;
 use chrono::Utc;
 use mio::net::TcpStream;
@@ -68,7 +67,6 @@ impl Server {
 
     pub fn access_log(&self, request: Request, config: &Config, status_code: u16, cookie: &String) {
         // Log request
-        println!("Log request here");
         let mut tera = Tera::default();
         tera.add_raw_template("access_log", &config.http.access_log_format).unwrap();
         let mut context = Context::new();
@@ -114,7 +112,23 @@ impl Server {
         cookie: String,
         config: &Config
     ) {
-        let mut location_path = String::new();
+        // Vérification de la méthode
+        if !self.accepted_methods.iter().any(|m| m.to_uppercase() == request.method.to_uppercase()) {
+            Self::send_error_response(
+                &self,
+                &mut stream,
+                request.clone(),
+                config,
+                405,
+                "Method Not Allowed",
+                &cookie
+            );
+            return;
+        }
+
+
+
+        let location_path;
         // Chemin réel du fichier
         let mut root = self.root_directory.clone();
         root = remove_suffix(root, "/");
@@ -123,13 +137,8 @@ impl Server {
 
         let discover = fs::read_dir(&location);
         let entries: ReadDir;
-        let mut all: Vec<DirectoryElement> = vec![];
-        let mut dir_path = String::new();
-        println!(
-            "Vérification de l'existence de {} : {}",
-            &location,
-            Path::new(&location).exists()
-        );
+        let all;
+        let mut dir_path;
 
         if !request.location.contains(".") {
             if !Path::new(&location).exists() {
@@ -142,6 +151,7 @@ impl Server {
                     "Not Found",
                     &cookie
                 );
+                return;
             }
             location_path = "/index.html".to_string();
             dir_path = "src/static_files".to_string();
@@ -192,10 +202,8 @@ impl Server {
         if Path::new(&path).exists() {
             // Servir un fichier statique
             self.handle_static_file(request, config, &mut stream, &path, cookie);
-            println!("Handle static function. Path: {}", &path);
         } else {
             // Ressource introuvable
-            println!("Handle static function error. Path: {}", &path);
             Self::send_error_response(
                 &self,
                 &mut stream,
@@ -253,13 +261,13 @@ impl Server {
 
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de l'en-tête : {}", e);
+                } else {
+                    // Log request
+                    self.access_log(request, config, 200, &cookie);
                 }
                 if let Err(e) = stream.write_all(&content) {
                     eprintln!("Erreur lors de l'envoi du contenu : {}", e);
                 }
-
-                // Log request
-                self.access_log(request, config, 200, &cookie);
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
@@ -302,10 +310,10 @@ impl Server {
 
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
+                } else {
+                    // Log request
+                    self.access_log(request, config, 200, &cookie);
                 }
-
-                // Log request
-                self.access_log(request, config, 200, &cookie);
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
@@ -352,9 +360,9 @@ impl Server {
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
                 } else {
+                    self.access_log(request, config, status_code, &cookie);
                     eprintln!("{}", status_message);
                 }
-                self.access_log(request, config, status_code, &cookie);
             }
             Err(e) => {
                 eprintln!("{}", e);

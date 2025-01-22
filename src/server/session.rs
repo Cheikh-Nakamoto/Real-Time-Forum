@@ -104,9 +104,6 @@ impl Session {
             cookie_value,
             expires
         );
-        println!("<=======================================================>");
-        println!("cookie header: {}", cookie_header);
-        println!("<=======================================================>");
 
         cookie_header
     }
