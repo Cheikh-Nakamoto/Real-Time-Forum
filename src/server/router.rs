@@ -1,3 +1,5 @@
+use crate::Config;
+
 use super::Request;
 pub use super::{Server, Session};
 use mio::net::{TcpListener, TcpStream};
@@ -75,7 +77,7 @@ impl Router {
         Ok(())
     }
     /// Démarre le Router et commence à écouter les événements.
-    pub fn run(&mut self) -> io::Result<()> {
+    pub fn run(&mut self, config: &Config) -> io::Result<()> {
         let mut poll = Poll::new()?;
         let mut server_tokens = HashMap::new();
 
@@ -91,16 +93,15 @@ impl Router {
             poll.poll(&mut events, None)?;
 
             for event in events.iter() {
-                if let Some(&addr) = server_tokens.get(&event.token()) {
+                if let Some(_) = server_tokens.get(&event.token()) {
                     // Nouvelle connexion sur un TcpListener
                     self.accept_connection(event.token(), &poll)?;
-                    println!("Nouvelle connexion sur le port {}", addr.port());
+                    // println!("Nouvelle connexion sur le port {}", addr.port());
                 } else {
                     // Données reçues sur un TcpStream
                     let stream = (self.clients.get_mut(&event.token()))
                         .expect("Erreur lors de la recupeartion du canal tcpstream");
                     let req = Request::read_request(stream, event.token());
-                    println!("voila la requete {:?}", req);
                     let mut cookie = req.id_session.clone();
                     let client_token = Token(self.next_token);
                     self.next_token += 1;
@@ -115,7 +116,6 @@ impl Router {
                                 new_session.id = session.id.clone();
                                 self.sessions.remove(&old_token);
                                 self.sessions.insert(client_token.clone(), new_session);
-                                println!("Update de la session client {:?} associé au nouveau token {:?}", old_token, client_token);
                                 session_found = true;
                                 break;
                             } else if session.id == cookie && session.is_expired() {
@@ -123,7 +123,6 @@ impl Router {
                                 new_session.id = session.id.clone();
                                 self.sessions.remove(&old_token);
                                 self.sessions.insert(client_token.clone(), new_session);
-                                println!("Creation d'une nouvelle session client {:?} associé au nouveau token {:?} dont la session precedente a expiere", old_token, client_token);
                                 session_found = true;
                                 break;
                             }
@@ -134,20 +133,12 @@ impl Router {
                             let new_session = Session::new();
                             self.sessions
                                 .insert(client_token.clone(), new_session.clone());
-                            println!(
-                                "Nouvelle session créée pour le client avec le token {:?}",
-                                client_token
-                            );
                         }
                     } else {
                         // Si aucun cookie n'est trouvé, créez une nouvelle session
                         let new_session = Session::new();
                         self.sessions
                             .insert(client_token.clone(), new_session.clone());
-                        println!(
-                            "Nouvelle session créée pour le client avec le token {:?}",
-                            client_token
-                        );
                     }
 
                     if let Some(session) = self.sessions.get_mut(&client_token) {
@@ -158,7 +149,7 @@ impl Router {
                         );
                     }
                     //println!("All session : {:?}", self.sessions);
-                    Self::route_request(self.servers.clone(), &req, stream, cookie);
+                    Self::route_request(self.servers.clone(), &req, stream, cookie, &config);
                 }
             }
         }
@@ -183,12 +174,13 @@ impl Router {
         req: &Request,
         stream: &mut TcpStream,
         cookie: String,
+        config: &Config
     ) {
         // On récupère le hostname, l'adresse ip et le port de la requête
         // On parcoure la liste des serveurs et on vérifie lequel a le hostname, le port et l'ip correspondant
         for server in servers.into_iter() {
             if server.ip_addr == req.host && server.ports.contains(&req.port) {
-                server.handle_request(stream, req.clone(), cookie.clone());
+                server.handle_request(stream, req.clone(), cookie.clone(), config);
             }
         }
     }

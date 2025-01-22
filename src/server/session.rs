@@ -1,7 +1,7 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{ DateTime, Duration, Utc };
 use mio::net::TcpStream;
 use std::collections::HashMap;
-use std::io::{BufReader, Read};
+use std::io::{ BufReader, Read };
 use uuid::Uuid;
 
 // -------------------------------------------------------------------------------------
@@ -15,23 +15,21 @@ pub struct Session {
 }
 
 impl Session {
+    pub(crate) const SESSION_LIFETIME: i64 = 60 * 60 * (1000 / 16);
+
     pub fn new() -> Self {
         let expires_duration = Duration::milliseconds(Self::SESSION_LIFETIME);
 
         Self {
             id: Uuid::new_v4().into(),
-            expiration_time:Self::SESSION_LIFETIME,
-            validity_time:Utc::now() + expires_duration,
+            expiration_time: Self::SESSION_LIFETIME,
+            validity_time: Utc::now() + expires_duration,
         }
     }
-    pub(crate) const SESSION_LIFETIME: i64 = 60 * 60 * (1000/16);
-
 
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.validity_time
     }
-
-
 
     /// Récupère la valeur d'un cookie spécifique à partir d'un TcpStream.
     pub fn get_cookie_from_stream(stream: &mut TcpStream, cookie_name: &str) -> Option<String> {
@@ -95,20 +93,20 @@ impl Session {
         let expires_duration = Duration::milliseconds(expires_in);
 
         // Calculer la date d'expiration
-        let expires = (Utc::now() + expires_duration).format("%a, %d %b %Y %H:%M:%S GMT").to_string();
+        let expires = (Utc::now() + expires_duration)
+            .format("%a, %d %b %Y %H:%M:%S GMT")
+            .to_string();
 
         // Construire l'en-tête Set-Cookie
         let cookie_header = format!(
             "Set-Cookie: {}={}; Path=/; HttpOnly; Expires={}\r\n",
-            cookie_name, cookie_value, expires
+            cookie_name,
+            cookie_value,
+            expires
         );
-        println!("<=======================================================>");
-        println!("cookie header: {}", cookie_header);
-        println!("<=======================================================>");
 
         cookie_header
     }
-
 }
 // -------------------------------------------------------------------------------------
 #[cfg(test)]
@@ -120,10 +118,7 @@ mod tests {
     #[test]
     fn test_session_not_expired() {
         let session = Session::new();
-        assert!(
-            !session.is_expired(),
-            "La session ne devrait pas être expirée."
-        );
+        assert!(!session.is_expired(), "La session ne devrait pas être expirée.");
     }
 
     #[test]
@@ -137,9 +132,6 @@ mod tests {
     fn test_session_expired_after_delay() {
         let session = Session::new();
         thread::sleep(Duration::from_secs(2)); // Attendre 2 secondes
-        assert!(
-            session.is_expired(),
-            "La session devrait être expirée après le délai."
-        );
+        assert!(session.is_expired(), "La session devrait être expirée après le délai.");
     }
 }

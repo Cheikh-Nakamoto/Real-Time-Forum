@@ -1,7 +1,8 @@
 pub mod request;
 use std::{ fs, io::Write, path::Path };
-use std::fs::ReadDir;
+use std::fs::{ OpenOptions, ReadDir };
 pub use std::string::String;
+use chrono::Utc;
 use mio::net::TcpStream;
 pub use request::*;
 pub mod response;
@@ -18,7 +19,7 @@ pub mod rendering_page;
 pub use cgi::*;
 pub use rendering_page::*;
 
-use crate::{remove_prefix, remove_suffix};
+use crate::{ remove_prefix, remove_suffix, Config, Redirection };
 
 // -------------------------------------------------------------------------------------
 // SERVER
@@ -35,6 +36,8 @@ pub struct Server {
     pub upload_limit: u32,
     pub accepted_methods: Vec<String>,
     pub directory_listing: bool,
+    pub redirections: Vec<Redirection>,
+    pub exclusion: Vec<String>
 }
 
 impl Server {
@@ -48,7 +51,9 @@ impl Server {
         cgi_file_format: String,
         upload_limit: u32,
         accepted_methods: Vec<String>,
-        directory_listing: bool
+        directory_listing: bool,
+        redirections: Vec<Redirection>,
+        exclusion: Vec<String>,
     ) -> Self {
         Self {
             ip_addr,
@@ -61,11 +66,73 @@ impl Server {
             upload_limit,
             accepted_methods,
             directory_listing,
+            redirections,
+            exclusion
         }
     }
 
-    pub fn handle_request(&self, mut stream: &mut TcpStream, request: Request, cookie: String) {
-        let mut location_path = String::new();
+    pub fn access_log(&self, request: Request, config: &Config, status_code: u16, cookie: &String) {
+        // Log request
+        let mut tera = Tera::default();
+        tera.add_raw_template("access_log", &config.http.access_log_format).unwrap();
+        let mut context = Context::new();
+        // "{{remote_addr}} - {{remote_user}} [{{time_local}}] - {{method}} - {{status}} {{bytes_sent}}"
+
+        let id_session = if let Some(p1) = cookie.split(";").into_iter().next() {
+            let parts = p1.split("=").collect::<Vec<&str>>();
+            if parts.len() == 2 {
+                parts[1]
+            } else {
+                ""
+            }
+        } else {
+            ""
+        };
+
+        let addr = format!("{}:{}{}", &request.host, &request.port, &request.location);
+        context.insert("remote_addr", &addr);
+        context.insert("remote_user", id_session);
+        context.insert("time_local", &format!("{}", Utc::now().format("%d-%m-%Y %H:%M:%S")));
+        context.insert("method", &request.method);
+        context.insert("status", &status_code);
+        context.insert("bytes_sent", &((request.bytes as f64) / 1000.0));
+
+        if let Ok(str) = tera.render("access_log", &context) {
+            match OpenOptions::new().append(true).open(&config.log_files.access_log) {
+                Ok(mut log_file) => {
+                    let log_result = log_file.write((str + "\n").as_bytes());
+                    match log_result {
+                        Err(e) => eprintln!("Writing error. Err: {}", e),
+                        Ok(_) => (),
+                    }
+                }
+                Err(_) => (),
+            }
+        }
+    }
+
+    pub fn handle_request(
+        &self,
+        mut stream: &mut TcpStream,
+        request: Request,
+        cookie: String,
+        config: &Config
+    ) {
+        // Vérification de la méthode
+        if !self.accepted_methods.iter().any(|m| m.to_uppercase() == request.method.to_uppercase()) {
+            Self::send_error_response(
+                &self,
+                &mut stream,
+                request.clone(),
+                config,
+                405,
+                "Method Not Allowed",
+                &cookie
+            );
+            return;
+        }
+
+        let location_path;
         // Chemin réel du fichier
         let mut root = self.root_directory.clone();
         root = remove_suffix(root, "/");
@@ -74,17 +141,21 @@ impl Server {
 
         let discover = fs::read_dir(&location);
         let entries: ReadDir;
-        let mut all: Vec<DirectoryElement> = vec![];
-        let mut dir_path = String::new();
-        println!(
-            "Vérification de l'existence de {} : {}",
-            &location,
-            Path::new(&location).exists()
-        );
+        let all;
+        let mut dir_path;
 
         if !request.location.contains(".") {
             if !Path::new(&location).exists() {
-                Self::send_error_response(&self, &mut stream, 404, "Not Found");
+                Self::send_error_response(
+                    &self,
+                    &mut stream,
+                    request.clone(),
+                    config,
+                    404,
+                    "Not Found",
+                    &cookie
+                );
+                return;
             }
             location_path = "/index.html".to_string();
             dir_path = "src/static_files".to_string();
@@ -97,7 +168,11 @@ impl Server {
             dir_path = "src/static_files".to_string();
         }
 
-        let path = format!("./{}/{}", remove_suffix(dir_path, "/"), remove_prefix(location_path, "/")); // Chemin relatif au dossier public
+        let path = format!(
+            "./{}/{}",
+            remove_suffix(dir_path, "/"),
+            remove_prefix(location_path, "/")
+        ); // Chemin relatif au dossier public
 
         if !discover.is_err() {
             entries = discover.unwrap();
@@ -124,22 +199,35 @@ impl Server {
                 })
                 .collect::<Vec<DirectoryElement>>();
 
-            self.handle_listing_directory(&mut stream, all, cookie);
+            self.handle_listing_directory(&mut stream, all, cookie, request, config);
             return;
         }
 
         if Path::new(&path).exists() {
             // Servir un fichier statique
-            self.handle_static_file(&mut stream, &path, cookie);
-            println!("Handle static function. Path: {}", &path);
+            self.handle_static_file(request, config, &mut stream, &path, cookie);
         } else {
             // Ressource introuvable
-            println!("Handle static function error. Path: {}", &path);
-            Self::send_error_response(&self, &mut stream, 404, "Not Found");
+            Self::send_error_response(
+                &self,
+                &mut stream,
+                request,
+                config,
+                404,
+                "Not Found",
+                &cookie
+            );
         }
     }
 
-    fn handle_static_file(&self, stream: &mut TcpStream, path: &str, cookie: String) {
+    fn handle_static_file(
+        &self,
+        request: Request,
+        config: &Config,
+        stream: &mut TcpStream,
+        path: &str,
+        cookie: String
+    ) {
         // Déterminer le type de contenu en fonction de l'extension du fichier
         let mut to_cgi = false;
         let content_type = match
@@ -177,6 +265,9 @@ impl Server {
 
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de l'en-tête : {}", e);
+                } else {
+                    // Log request
+                    self.access_log(request, config, 200, &cookie);
                 }
                 if let Err(e) = stream.write_all(&content) {
                     eprintln!("Erreur lors de l'envoi du contenu : {}", e);
@@ -184,7 +275,15 @@ impl Server {
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
-                Self::send_error_response(&self, stream, 500, "Internal Server Error");
+                Self::send_error_response(
+                    &self,
+                    stream,
+                    request,
+                    config,
+                    500,
+                    "Internal Server Error",
+                    &cookie
+                );
             }
         }
     }
@@ -194,7 +293,9 @@ impl Server {
         &self,
         stream: &mut TcpStream,
         all: Vec<DirectoryElement>,
-        cookie: String
+        cookie: String,
+        request: Request,
+        config: &Config
     ) {
         // Chargement du template
         let tera = Tera::new("src/**/*.html").unwrap();
@@ -213,17 +314,36 @@ impl Server {
 
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
+                } else {
+                    // Log request
+                    self.access_log(request, config, 200, &cookie);
                 }
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
-                Self::send_error_response(&self, stream, 500, "Internal Server Error");
+                Self::send_error_response(
+                    &self,
+                    stream,
+                    request,
+                    config,
+                    500,
+                    "Internal Server Error",
+                    &cookie
+                );
             }
         }
     }
 
     /// Envoie une réponse d'erreur HTTP.
-    fn send_error_response(&self, stream: &mut TcpStream, status_code: u16, status_message: &str) {
+    fn send_error_response(
+        &self,
+        stream: &mut TcpStream,
+        request: Request,
+        config: &Config,
+        status_code: u16,
+        status_message: &str,
+        cookie: &String
+    ) {
         // Chargement du template
         let tera = Tera::new("src/**/*.html").unwrap();
         let mut context = Context::new();
@@ -244,6 +364,7 @@ impl Server {
                 if let Err(e) = stream.write_all(response.as_bytes()) {
                     eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
                 } else {
+                    self.access_log(request, config, status_code, &cookie);
                     eprintln!("{}", status_message);
                 }
             }
@@ -264,14 +385,5 @@ impl Server {
             path.strip_prefix("/").unwrap().to_string()
         }
     }
-    // pub fn access_log(&self, req: &Request) {
-    //     let mut file = OpenOptions::new()
-    //         .append(true)
-    //         .create(true)
-    //         .open(&self.access_log)
-    //         .unwrap();
-
-    //     writeln!(file, "{} {} {}", req.method, req.path, "200 OK").unwrap();
-    // }
 }
 // -------------------------------------------------------------------------------------
