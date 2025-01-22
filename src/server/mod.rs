@@ -66,7 +66,7 @@ impl Server {
         }
     }
 
-    pub fn log(&self, request: Request, config: &Config, status_code: u16, cookie: &String) {
+    pub fn access_log(&self, request: Request, config: &Config, status_code: u16, cookie: &String) {
         // Log request
         println!("Log request here");
         let mut tera = Tera::default();
@@ -259,7 +259,7 @@ impl Server {
                 }
 
                 // Log request
-                self.log(request, config, 200, &cookie);
+                self.access_log(request, config, 200, &cookie);
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
@@ -305,7 +305,7 @@ impl Server {
                 }
 
                 // Log request
-                self.log(request, config, 200, &cookie);
+                self.access_log(request, config, 200, &cookie);
             }
             Err(e) => {
                 eprintln!("Erreur lors de la lecture du fichier : {}", e);
@@ -354,7 +354,7 @@ impl Server {
                 } else {
                     eprintln!("{}", status_message);
                 }
-                self.log(request, config, status_code, &cookie);
+                self.access_log(request, config, status_code, &cookie);
             }
             Err(e) => {
                 eprintln!("{}", e);
@@ -373,14 +373,5 @@ impl Server {
             path.strip_prefix("/").unwrap().to_string()
         }
     }
-    // pub fn access_log(&self, req: &Request) {
-    //     let mut file = OpenOptions::new()
-    //         .append(true)
-    //         .create(true)
-    //         .open(&self.access_log)
-    //         .unwrap();
-
-    //     writeln!(file, "{} {} {}", req.method, req.path, "200 OK").unwrap();
-    // }
 }
 // -------------------------------------------------------------------------------------
