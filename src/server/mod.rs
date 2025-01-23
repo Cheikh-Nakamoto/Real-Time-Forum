@@ -81,7 +81,12 @@ impl Server {
     pub fn access_log(&self, request: &Request, config: &Config, status_code: u16, cookie: &String) {
         // Log request
         let mut tera = Tera::default();
-        tera.add_raw_template("access_log", &config.http.access_log_format).unwrap();
+        let res = tera.add_raw_template("access_log", &config.http.access_log_format);
+        if res.is_err() {
+            Self::error_log(request, config, "access_log", file!(), line!(), ServerError::TeraError(res.err().unwrap()));
+            return;
+        }
+
         let mut context = Context::new();
 
         let id_session = if let Some(p1) = cookie.split(";").into_iter().next() {
@@ -126,7 +131,7 @@ impl Server {
         error: ServerError
     ) {
         let str = format!(
-            "[{}]: {} - {}:{} - Func: {} at {}:{} - Error: {:?}",
+            "[{}]: {} - {}:{} - Func: {} at {}:{} - Error: {:?}\n",
             Utc::now().format("%d-%m-%Y %H:%M:%S"),
             format!("{: <5}", &request.method),
             request.host,
