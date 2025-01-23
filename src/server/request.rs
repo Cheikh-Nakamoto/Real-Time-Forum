@@ -47,7 +47,7 @@ impl Request {
 
         if n == 0 {
             // Connexion fermée par le client et doit etre logger dans server.log
-            println!("Client({}) deconnecte", token.0)
+            eprintln!("Client({}) deconnecte", token.0);
         }
 
         // Convertir les données reçues en une chaîne de caractères

@@ -21,6 +21,13 @@ pub use rendering_page::*;
 
 use crate::{ remove_prefix, remove_suffix, Config, Redirection };
 
+#[derive(Debug)]
+pub enum ServerError {
+    IOError(std::io::Error),
+    TeraError(tera::Error),
+    TomlError(toml::de::Error)
+}
+
 // -------------------------------------------------------------------------------------
 // SERVER
 // -------------------------------------------------------------------------------------
@@ -37,7 +44,7 @@ pub struct Server {
     pub accepted_methods: Vec<String>,
     pub directory_listing: bool,
     pub redirections: Vec<Redirection>,
-    pub exclusion: Vec<String>
+    pub exclusion: Vec<String>,
 }
 
 impl Server {
@@ -53,7 +60,7 @@ impl Server {
         accepted_methods: Vec<String>,
         directory_listing: bool,
         redirections: Vec<Redirection>,
-        exclusion: Vec<String>,
+        exclusion: Vec<String>
     ) -> Self {
         Self {
             ip_addr,
@@ -67,16 +74,20 @@ impl Server {
             accepted_methods,
             directory_listing,
             redirections,
-            exclusion
+            exclusion,
         }
     }
 
-    pub fn access_log(&self, request: Request, config: &Config, status_code: u16, cookie: &String) {
+    pub fn access_log(&self, request: &Request, config: &Config, status_code: u16, cookie: &String) {
         // Log request
         let mut tera = Tera::default();
-        tera.add_raw_template("access_log", &config.http.access_log_format).unwrap();
+        let res = tera.add_raw_template("access_log", &config.http.access_log_format);
+        if res.is_err() {
+            Self::error_log(request, config, "access_log", file!(), line!(), ServerError::TeraError(res.err().unwrap()));
+            return;
+        }
+
         let mut context = Context::new();
-        // "{{remote_addr}} - {{remote_user}} [{{time_local}}] - {{method}} - {{status}} {{bytes_sent}}"
 
         let id_session = if let Some(p1) = cookie.split(";").into_iter().next() {
             let parts = p1.split("=").collect::<Vec<&str>>();
@@ -93,21 +104,53 @@ impl Server {
         context.insert("remote_addr", &addr);
         context.insert("remote_user", id_session);
         context.insert("time_local", &format!("{}", Utc::now().format("%d-%m-%Y %H:%M:%S")));
-        context.insert("method", &request.method);
+        context.insert("method", &format!("{: <5}", &request.method));
         context.insert("status", &status_code);
-        context.insert("bytes_sent", &((request.bytes as f64) / 1000.0));
+        context.insert("bytes_sent", &format!("{: >8}", (request.bytes as f64) / 1000.0));
 
         if let Ok(str) = tera.render("access_log", &context) {
             match OpenOptions::new().append(true).open(&config.log_files.access_log) {
                 Ok(mut log_file) => {
                     let log_result = log_file.write((str + "\n").as_bytes());
                     match log_result {
-                        Err(e) => eprintln!("Writing error. Err: {}", e),
+                        Err(e) => Self::error_log(&request, config, "access_log", file!(), line!(), ServerError::IOError(e)),
                         Ok(_) => (),
                     }
                 }
                 Err(_) => (),
             }
+        }
+    }
+
+    pub fn error_log(
+        request: &Request,
+        config: &Config,
+        func_name: &str,
+        filename: &str,
+        line_number: u32,
+        error: ServerError
+    ) {
+        let str = format!(
+            "[{}]: {} - {}:{} - Func: {} at {}:{} - Error: {:?}\n",
+            Utc::now().format("%d-%m-%Y %H:%M:%S"),
+            format!("{: <5}", &request.method),
+            request.host,
+            request.port,
+            func_name,
+            filename,
+            line_number,
+            error
+        );
+
+        match OpenOptions::new().append(true).open(&config.log_files.error_log) {
+            Ok(mut log_file) => {
+                let log_result = log_file.write((str + "\n").as_bytes());
+                match log_result {
+                    Err(e) => eprintln!("Writing error. Err: {}", e),
+                    Ok(_) => (),
+                }
+            }
+            Err(_) => (),
         }
     }
 
@@ -264,17 +307,17 @@ impl Server {
                 );
 
                 if let Err(e) = stream.write_all(response.as_bytes()) {
-                    eprintln!("Erreur lors de l'envoi de l'en-tête : {}", e);
+                    Self::error_log(&request, config, "handle_static_file", file!(), line!(), ServerError::IOError(e));
                 } else {
                     // Log request
-                    self.access_log(request, config, 200, &cookie);
+                    self.access_log(&request, config, 200, &cookie);
                 }
                 if let Err(e) = stream.write_all(&content) {
-                    eprintln!("Erreur lors de l'envoi du contenu : {}", e);
+                    Self::error_log(&request, config, "handle_static_file", file!(), line!(), ServerError::IOError(e));
                 }
             }
             Err(e) => {
-                eprintln!("Erreur lors de la lecture du fichier : {}", e);
+                Self::error_log(&request, config, "handle_static_file", file!(), line!(), ServerError::IOError(e));
                 Self::send_error_response(
                     &self,
                     stream,
@@ -313,14 +356,14 @@ impl Server {
                 );
 
                 if let Err(e) = stream.write_all(response.as_bytes()) {
-                    eprintln!("Erreur lors de l'envoi de la réponse : {}", e);
+                    Self::error_log(&request, config, "handle_listing_directory", file!(), line!(), ServerError::IOError(e));
                 } else {
                     // Log request
-                    self.access_log(request, config, 200, &cookie);
+                    self.access_log(&request, config, 200, &cookie);
                 }
             }
             Err(e) => {
-                eprintln!("Erreur lors de la lecture du fichier : {}", e);
+                Self::error_log(&request, config, "handle_listing_directory", file!(), line!(), ServerError::TeraError(e));
                 Self::send_error_response(
                     &self,
                     stream,
@@ -362,14 +405,13 @@ impl Server {
                     content
                 );
                 if let Err(e) = stream.write_all(response.as_bytes()) {
-                    eprintln!("Erreur lors de l'envoi de la réponse d'erreur : {}", e);
+                    Self::error_log(&request, config, "send_error_response", file!(), line!(), ServerError::IOError(e));
                 } else {
-                    self.access_log(request, config, status_code, &cookie);
-                    eprintln!("{}", status_message);
+                    self.access_log(&request, config, status_code, &cookie);
                 }
             }
             Err(e) => {
-                eprintln!("{}", e);
+                Self::error_log(&request, config, "send_error_response", file!(), line!(), ServerError::TeraError(e));
             }
         }
     }
