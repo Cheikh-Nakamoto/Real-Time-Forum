@@ -310,7 +310,7 @@ impl Server {
 
                     match
                         (el.is_file() && !re.is_match(&name)) ||
-                        (el.is_dir() && self.directory_listing)
+                        (el.is_dir() && self.directory_listing && !re.is_match(&name))
                     {
                         true => {
                             let entry_name = remove_prefix(name.clone(), "/");

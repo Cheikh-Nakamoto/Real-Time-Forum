@@ -44,4 +44,4 @@ redirections = [
     { source = "/a", target = "/b" },
     { source = "/b", target = "/a" },
 ]
-exclusion = [".rb"]
+exclusion = [".png", ".rb", "d"]
