@@ -26,28 +26,34 @@
           class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-4 overflow-auto"
         >
           <!-- File Items -->
-          {% for el in elements %}
-          <div class="relative group">
-            <a
-              href="{{el.link}}"
-              class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors"
-            >
-              {% if el.is_directory %}
-              <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
-              {% elif el.entry_type == "ruby" %}
-              <i class="fas fa-gem text-4xl text-red-500 mb-2"></i>
-              {% else %}
-              <i class="fas fa-file text-4xl text-gray-200 mb-2"></i>
-              {% endif %}
-              <span class="text-white text-sm">{{el.entry}}</span>
-              <button
-                class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible"
+          {% if size == 0 %}
+            <div class="relative group">
+              <span class="text-white">Empty</span>
+            </div>
+          {% else %}
+            {% for el in elements %}
+            <div class="relative group">
+              <a
+                href="{{el.link}}"
+                class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors"
               >
-                <i class="fas fa-times text-white text-sm"></i>
-              </button>
-            </a>
-          </div>
-          {% endfor %}
+                {% if el.is_directory %}
+                <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                {% elif el.entry_type == "ruby" %}
+                <i class="fas fa-gem text-4xl text-red-500 mb-2"></i>
+                {% else %}
+                <i class="fas fa-file text-4xl text-gray-200 mb-2"></i>
+                {% endif %}
+                <span class="text-white text-sm">{{el.entry}}</span>
+                <button
+                  class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible"
+                >
+                  <i class="fas fa-times text-white text-sm"></i>
+                </button>
+              </a>
+            </div>
+            {% endfor %}
+          {% endif %}
         </div>
       </div>
       <!-- Bottom Actions -->
@@ -76,12 +82,13 @@
 
     <script>
       let createFolderHTML = `
-        <form method="POST" class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
+        <form method="GET" class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
             <div class="flex justify-between mx-auto">
                 <div class="flex flex-col gap-1">
                     <label class="block text-black text-sm font-medium tracking-wider">Folder name</label>
                     <input
                     type="text"
+                    name="foldername"
                     placeholder="Folder xyz..."
                     class="w-auto h-10 px-2 py-1 bg-[#472a2a] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-300 placeholder-gray-400"
                 >
@@ -96,13 +103,13 @@
         </form>
         `;
       let addFileHTML = `
-        <form method="POST" class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
+        <form method="POST" enctype="multipart/form-data" class="bg-white rounded-lg p-4 m-auto flex flex-col gap-4 relative">
             <label class="block text-black text-sm font-medium tracking-wider">Upload the file</label>
             <label for="add_file" class="w-auto px-6 py-2 bg-slate-300 text-black rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto">
                 <span class="tracking-wider font-bold">Select file</span>
                 <i class="fas fa-upload"></i>
             </label>
-            <input id="add_file" type="file" hidden>
+            <input id="add_file" name="file" type="file" hidden>
             <span id="selected-file" class="hidden"></span>
 
             <button type="submit" class="w-auto px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 shadow-md flex items-center gap-2 mr-auto mt-2">

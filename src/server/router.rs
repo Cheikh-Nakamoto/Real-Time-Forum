@@ -101,7 +101,7 @@ impl Router {
                     // Données reçues sur un TcpStream
                     let stream = (self.clients.get_mut(&event.token()))
                         .expect("Erreur lors de la recupération du canal tcpstream");
-                    let req = Request::read_request(stream, event.token());
+                    let req = Request::read_request(stream);
                     let mut cookie = req.id_session.clone();
                     let client_token = Token(self.next_token);
                     self.next_token += 1;
@@ -148,7 +148,6 @@ impl Router {
                             session.expiration_time,
                         );
                     }
-                    //println!("All session : {:?}", self.sessions);
                     Self::route_request(self.servers.clone(), &req, stream, cookie, &config);
                 }
             }
