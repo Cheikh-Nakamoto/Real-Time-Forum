@@ -26,28 +26,34 @@
           class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-4 overflow-auto"
         >
           <!-- File Items -->
-          {% for el in elements %}
-          <div class="relative group">
-            <a
-              href="{{el.link}}"
-              class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors"
-            >
-              {% if el.is_directory %}
-              <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
-              {% elif el.entry_type == "ruby" %}
-              <i class="fas fa-gem text-4xl text-red-500 mb-2"></i>
-              {% else %}
-              <i class="fas fa-file text-4xl text-gray-200 mb-2"></i>
-              {% endif %}
-              <span class="text-white text-sm">{{el.entry}}</span>
-              <button
-                class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible"
+          {% if size == 0 %}
+            <div class="relative group">
+              <span class="text-white">Empty</span>
+            </div>
+          {% else %}
+            {% for el in elements %}
+            <div class="relative group">
+              <a
+                href="{{el.link}}"
+                class="flex flex-col items-center p-4 bg-transparent rounded-lg hover:bg-[#9a7777] transition-colors"
               >
-                <i class="fas fa-times text-white text-sm"></i>
-              </button>
-            </a>
-          </div>
-          {% endfor %}
+                {% if el.is_directory %}
+                <i class="fas fa-folder text-4xl text-yellow-400 mb-2"></i>
+                {% elif el.entry_type == "ruby" %}
+                <i class="fas fa-gem text-4xl text-red-500 mb-2"></i>
+                {% else %}
+                <i class="fas fa-file text-4xl text-gray-200 mb-2"></i>
+                {% endif %}
+                <span class="text-white text-sm">{{el.entry}}</span>
+                <button
+                  class="absolute top-1 right-1 p-1 bg-transparent hover:bg-[#724444] rounded-full invisible group-hover:visible"
+                >
+                  <i class="fas fa-times text-white text-sm"></i>
+                </button>
+              </a>
+            </div>
+            {% endfor %}
+          {% endif %}
         </div>
       </div>
       <!-- Bottom Actions -->

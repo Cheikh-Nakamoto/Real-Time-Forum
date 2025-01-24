@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use mio::{net::TcpStream, Token};
+use mio::net::TcpStream;
 
 // -------------------------------------------------------------------------------------
 // REQUEST
@@ -15,7 +15,7 @@ pub struct Request {
     pub bytes: usize,
     pub body: String,
     pub filename: String,
-    pub lenght: usize,
+    pub length: usize,
 }
 
 impl Request {
@@ -28,7 +28,7 @@ impl Request {
         bytes: usize,
         body: String,
         filename: String,
-        lenght: usize,
+        length: usize,
     ) -> Self {
         Self {
             id_session,
@@ -39,11 +39,11 @@ impl Request {
             bytes,
             body,
             filename,
-            lenght,
+            length,
         }
     }
     /// Lit une requête HTTP à partir d'un TcpStream.
-    pub fn read_request(stream: &mut TcpStream, token: Token) -> Self {
+    pub fn read_request(stream: &mut TcpStream) -> Self {
         let mut buffer = [0; 8192]; // Buffer de 8 Ko
         let mut request_str = String::new();
         let mut headers_end = None;
@@ -52,8 +52,6 @@ impl Request {
         loop {
             let n = stream.read(&mut buffer).unwrap_or_default();
             if n == 0 {
-                // Connexion fermée par le client
-                eprintln!("Client({}) déconnecté", token.0);
                 break;
             }
 
@@ -72,19 +70,19 @@ impl Request {
         let headers = &request_str[..headers_end];
 
         // Parser les en-têtes pour créer une instance de `Request`
-        let request = Request::parse_http_request(headers);
+        let request = Request::parse_http_request(headers,headers_end);
 
         request
     }
     /// Parse une requête HTTP et crée une instance de `Request`.
-    pub fn parse_http_request(request_str: &str) -> Self {
+    pub fn parse_http_request(request_str: &str, header_end:usize) -> Self {
         let mut location = String::new();
         let mut host = String::new();
         let mut port: u16 = 0;
         let mut method = String::new();
         let mut filename = String::new();
         let mut body = String::new();
-        let mut length = 0;
+        let mut length = header_end;
 
         // Diviser la requête en lignes
         let lines: Vec<&str> = request_str.lines().collect();
@@ -111,7 +109,7 @@ impl Request {
                 filename = Self::extract_filename(line);
             } else if line.starts_with("Content-Length:") {
                 // Extraire la taille du fichier
-                length = line
+                length += line
                     .split(":")
                     .nth(1)
                     .and_then(|s| s.trim().parse::<usize>().ok())
