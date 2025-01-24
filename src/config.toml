@@ -36,7 +36,7 @@ error_path = "src/static_files/error.html"
 default_file = "src/static_files/index.html"
 cgi_file_format = ".py"
 upload_limit = 5000
-accepted_methods = ["GET", "POST"]
+accepted_methods = ["GET", "POST","PUT"]
 directory_listing = false
 redirections = [
     { source = "/mouton", target = "/" },

@@ -148,7 +148,6 @@ impl Router {
                             session.expiration_time,
                         );
                     }
-                    //println!("All session : {:?}", self.sessions);
                     Self::route_request(self.servers.clone(), &req, stream, cookie, &config);
                 }
             }
