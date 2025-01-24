@@ -181,10 +181,6 @@ impl Server {
         root = remove_suffix(root, "/");
 
         let location = "./".to_string() + &root + &request.location;
-
-        let discover = fs::read_dir(&location);
-        let entries: ReadDir;
-        let all;
         let mut dir_path;
 
         if !request.location.contains(".") {
@@ -217,27 +213,41 @@ impl Server {
             remove_prefix(location_path, "/")
         ); // Chemin relatif au dossier public
 
+        let discover = fs::read_dir(&location);
+        let entries: ReadDir;
+        let all;
+
         if !discover.is_err() {
             entries = discover.unwrap();
             all = entries
-                .map(|entry| {
+                .filter_map(|entry| {
                     let el = entry.unwrap().path();
-                    let name = el.to_str().unwrap().strip_prefix(&location).unwrap().to_string();
+                    match el.is_file() || (el.is_dir() && self.directory_listing) {
+                        true => {
+                            let name = el
+                                .to_str()
+                                .unwrap()
+                                .strip_prefix(&location)
+                                .unwrap()
+                                .to_string();
 
-                    let entry_name = remove_prefix(name.clone(), "/");
+                            let entry_name = remove_prefix(name.clone(), "/");
 
-                    DirectoryElement {
-                        entry: entry_name.clone(),
-                        entry_type: match el.is_dir() {
-                            true => "folder".to_string(),
-                            _ =>
-                                match entry_name.strip_suffix(".rb") {
-                                    Some(_) => "ruby".to_string(),
-                                    None => "file".to_string(),
-                                }
-                        },
-                        link: request.location.clone() + &name,
-                        is_directory: el.is_dir(),
+                            Some(DirectoryElement {
+                                entry: entry_name.clone(),
+                                entry_type: match el.is_dir() {
+                                    true => "folder".to_string(),
+                                    _ =>
+                                        match entry_name.strip_suffix(".rb") {
+                                            Some(_) => "ruby".to_string(),
+                                            None => "file".to_string(),
+                                        }
+                                },
+                                link: request.location.clone() + &name,
+                                is_directory: el.is_dir(),
+                            })
+                        }
+                        false => None,
                     }
                 })
                 .collect::<Vec<DirectoryElement>>();
