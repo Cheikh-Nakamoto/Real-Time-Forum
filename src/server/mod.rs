@@ -189,13 +189,44 @@ impl Server {
             Self::send_error_response(
                 &self,
                 &mut stream,
-                request.clone(),
+                &request,
                 config,
                 405,
                 "Method Not Allowed",
                 &cookie
             );
             return;
+        }
+
+        let mut redirects = self.redirections.clone();
+        redirects.retain(|r| r.source == request.location);
+
+        if redirects.len() > 0 {
+            match self.redirections.iter().any(|r| r.target == request.location) {
+                true =>
+                    Self::send_error_response(
+                        &self,
+                        stream,
+                        &request,
+                        config,
+                        508,
+                        "Loop Detected",
+                        &cookie
+                    ),
+                false => {
+                    // Construire la réponse de redirection
+                    let response =
+                        format!("HTTP/1.1 302 Found\r\n\
+                            Location: {}\r\n\
+                            Content-Length: 0\r\n\
+                            Connection: close\r\n\r\n", redirects[0].target.clone());
+
+                    // Envoyer la réponse via le TcpStream
+                    stream.write_all(response.as_bytes()).unwrap();
+                    let _ = stream.flush();
+                    return;
+                }
+            }
         }
 
         let location_path;
@@ -211,7 +242,7 @@ impl Server {
                 Self::send_error_response(
                     &self,
                     &mut stream,
-                    request.clone(),
+                    &request,
                     config,
                     404,
                     "Not Found",
@@ -248,13 +279,23 @@ impl Server {
                     let name = el.to_str().unwrap().strip_prefix(&location).unwrap().to_string();
                     let re_init = RegexSet::new(&self.exclusion);
                     if re_init.is_err() {
-                        Self::error_log(&request, config, "handle_request", file!(), line!(), ServerError::RegexError(re_init.err().unwrap()));
+                        Self::error_log(
+                            &request,
+                            config,
+                            "handle_request",
+                            file!(),
+                            line!(),
+                            ServerError::RegexError(re_init.err().unwrap())
+                        );
                         return None;
                     }
 
                     let re = re_init.unwrap();
 
-                    match (el.is_file() && !re.is_match(&name)) || (el.is_dir() && self.directory_listing) {
+                    match
+                        (el.is_file() && !re.is_match(&name)) ||
+                        (el.is_dir() && self.directory_listing)
+                    {
                         true => {
                             let entry_name = remove_prefix(name.clone(), "/");
 
@@ -289,7 +330,7 @@ impl Server {
             Self::send_error_response(
                 &self,
                 &mut stream,
-                request,
+                &request,
                 config,
                 404,
                 "Not Found",
@@ -353,6 +394,7 @@ impl Server {
                 } else {
                     // Log request
                     self.access_log(&request, config, 200, &cookie);
+                    let _ = stream.flush();
                 }
                 if let Err(e) = stream.write_all(&content) {
                     Self::error_log(
@@ -377,7 +419,7 @@ impl Server {
                 Self::send_error_response(
                     &self,
                     stream,
-                    request,
+                    &request,
                     config,
                     500,
                     "Internal Server Error",
@@ -423,6 +465,7 @@ impl Server {
                 } else {
                     // Log request
                     self.access_log(&request, config, 200, &cookie);
+                    let _ = stream.flush();
                 }
             }
             Err(e) => {
@@ -437,7 +480,7 @@ impl Server {
                 Self::send_error_response(
                     &self,
                     stream,
-                    request,
+                    &request,
                     config,
                     500,
                     "Internal Server Error",
@@ -451,7 +494,7 @@ impl Server {
     fn send_error_response(
         &self,
         stream: &mut TcpStream,
-        request: Request,
+        request: &Request,
         config: &Config,
         status_code: u16,
         status_message: &str,
@@ -485,6 +528,7 @@ impl Server {
                     );
                 } else {
                     self.access_log(&request, config, status_code, &cookie);
+                    let _ = stream.flush();
                 }
             }
             Err(e) => {

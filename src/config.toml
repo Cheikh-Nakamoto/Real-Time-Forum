@@ -5,15 +5,15 @@ events_limit = 128
 
 [http]
 access_log_format = "[{{time_local}}] - {{method}} {{status}} - {{bytes_sent}} kb - {{remote_user}} - {{remote_addr}}"
-timeout = 3000 # seconds
-size_limit = 5000 # kb
+timeout = 3000                                                                                                         # seconds
+size_limit = 5000                                                                                                      # kb
 
 [http.servers]
 
 [http.servers.server1]
 ip_addr = "127.0.0.2"
 hostname = "mylocalhost"
-ports = [8082,8083]
+ports = [8082, 8083]
 root_directory = "src/www"
 error_path = "src/static_files/error.html"
 default_file = "src/static_files/index.html"
@@ -41,5 +41,7 @@ directory_listing = false
 redirections = [
     { source = "/mouton", target = "/" },
     { source = "/chevre", target = "/" },
+    { source = "/a", target = "/b" },
+    { source = "/b", target = "/a" },
 ]
 exclusion = [".rb"]
