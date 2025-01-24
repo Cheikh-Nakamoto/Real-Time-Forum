@@ -4,6 +4,7 @@ use std::fs::{ OpenOptions, ReadDir };
 pub use std::string::String;
 use chrono::Utc;
 use mio::net::TcpStream;
+use regex::RegexSet;
 pub use request::*;
 pub mod response;
 pub use response::*;
@@ -25,7 +26,8 @@ use crate::{ remove_prefix, remove_suffix, Config, Redirection };
 pub enum ServerError {
     IOError(std::io::Error),
     TeraError(tera::Error),
-    TomlError(toml::de::Error)
+    TomlError(toml::de::Error),
+    RegexError(regex::Error),
 }
 
 // -------------------------------------------------------------------------------------
@@ -78,12 +80,25 @@ impl Server {
         }
     }
 
-    pub fn access_log(&self, request: &Request, config: &Config, status_code: u16, cookie: &String) {
+    pub fn access_log(
+        &self,
+        request: &Request,
+        config: &Config,
+        status_code: u16,
+        cookie: &String
+    ) {
         // Log request
         let mut tera = Tera::default();
         let res = tera.add_raw_template("access_log", &config.http.access_log_format);
         if res.is_err() {
-            Self::error_log(request, config, "access_log", file!(), line!(), ServerError::TeraError(res.err().unwrap()));
+            Self::error_log(
+                request,
+                config,
+                "access_log",
+                file!(),
+                line!(),
+                ServerError::TeraError(res.err().unwrap())
+            );
             return;
         }
 
@@ -113,7 +128,15 @@ impl Server {
                 Ok(mut log_file) => {
                     let log_result = log_file.write((str + "\n").as_bytes());
                     match log_result {
-                        Err(e) => Self::error_log(&request, config, "access_log", file!(), line!(), ServerError::IOError(e)),
+                        Err(e) =>
+                            Self::error_log(
+                                &request,
+                                config,
+                                "access_log",
+                                file!(),
+                                line!(),
+                                ServerError::IOError(e)
+                            ),
                         Ok(_) => (),
                     }
                 }
@@ -166,7 +189,7 @@ impl Server {
             Self::send_error_response(
                 &self,
                 &mut stream,
-                request.clone(),
+                &request,
                 config,
                 405,
                 "Method Not Allowed",
@@ -175,16 +198,43 @@ impl Server {
             return;
         }
 
+        let mut redirects = self.redirections.clone();
+        redirects.retain(|r| r.source == request.location);
+
+        if redirects.len() > 0 {
+            match self.redirections.iter().any(|r| r.target == request.location) {
+                true =>
+                    Self::send_error_response(
+                        &self,
+                        stream,
+                        &request,
+                        config,
+                        508,
+                        "Loop Detected",
+                        &cookie
+                    ),
+                false => {
+                    // Construire la réponse de redirection
+                    let response =
+                        format!("HTTP/1.1 302 Found\r\n\
+                            Location: {}\r\n\
+                            Content-Length: 0\r\n\
+                            Connection: close\r\n\r\n", redirects[0].target.clone());
+
+                    // Envoyer la réponse via le TcpStream
+                    stream.write_all(response.as_bytes()).unwrap();
+                    let _ = stream.flush();
+                    return;
+                }
+            }
+        }
+
         let location_path;
         // Chemin réel du fichier
         let mut root = self.root_directory.clone();
         root = remove_suffix(root, "/");
 
         let location = "./".to_string() + &root + &request.location;
-
-        let discover = fs::read_dir(&location);
-        let entries: ReadDir;
-        let all;
         let mut dir_path;
 
         if !request.location.contains(".") {
@@ -192,7 +242,7 @@ impl Server {
                 Self::send_error_response(
                     &self,
                     &mut stream,
-                    request.clone(),
+                    &request,
                     config,
                     404,
                     "Not Found",
@@ -217,27 +267,53 @@ impl Server {
             remove_prefix(location_path, "/")
         ); // Chemin relatif au dossier public
 
+        let discover = fs::read_dir(&location);
+        let entries: ReadDir;
+        let all;
+
         if !discover.is_err() {
             entries = discover.unwrap();
             all = entries
-                .map(|entry| {
+                .filter_map(|entry| {
                     let el = entry.unwrap().path();
                     let name = el.to_str().unwrap().strip_prefix(&location).unwrap().to_string();
+                    let re_init = RegexSet::new(&self.exclusion);
+                    if re_init.is_err() {
+                        Self::error_log(
+                            &request,
+                            config,
+                            "handle_request",
+                            file!(),
+                            line!(),
+                            ServerError::RegexError(re_init.err().unwrap())
+                        );
+                        return None;
+                    }
 
-                    let entry_name = remove_prefix(name.clone(), "/");
+                    let re = re_init.unwrap();
 
-                    DirectoryElement {
-                        entry: entry_name.clone(),
-                        entry_type: match el.is_dir() {
-                            true => "folder".to_string(),
-                            _ =>
-                                match entry_name.strip_suffix(".rb") {
-                                    Some(_) => "ruby".to_string(),
-                                    None => "file".to_string(),
-                                }
-                        },
-                        link: request.location.clone() + &name,
-                        is_directory: el.is_dir(),
+                    match
+                        (el.is_file() && !re.is_match(&name)) ||
+                        (el.is_dir() && self.directory_listing)
+                    {
+                        true => {
+                            let entry_name = remove_prefix(name.clone(), "/");
+
+                            Some(DirectoryElement {
+                                entry: entry_name.clone(),
+                                entry_type: match el.is_dir() {
+                                    true => "folder".to_string(),
+                                    _ =>
+                                        match entry_name.strip_suffix(".rb") {
+                                            Some(_) => "ruby".to_string(),
+                                            None => "file".to_string(),
+                                        }
+                                },
+                                link: request.location.clone() + &name,
+                                is_directory: el.is_dir(),
+                            })
+                        }
+                        false => None,
                     }
                 })
                 .collect::<Vec<DirectoryElement>>();
@@ -254,7 +330,7 @@ impl Server {
             Self::send_error_response(
                 &self,
                 &mut stream,
-                request,
+                &request,
                 config,
                 404,
                 "Not Found",
@@ -307,21 +383,43 @@ impl Server {
                 );
 
                 if let Err(e) = stream.write_all(response.as_bytes()) {
-                    Self::error_log(&request, config, "handle_static_file", file!(), line!(), ServerError::IOError(e));
+                    Self::error_log(
+                        &request,
+                        config,
+                        "handle_static_file",
+                        file!(),
+                        line!(),
+                        ServerError::IOError(e)
+                    );
                 } else {
                     // Log request
                     self.access_log(&request, config, 200, &cookie);
+                    let _ = stream.flush();
                 }
                 if let Err(e) = stream.write_all(&content) {
-                    Self::error_log(&request, config, "handle_static_file", file!(), line!(), ServerError::IOError(e));
+                    Self::error_log(
+                        &request,
+                        config,
+                        "handle_static_file",
+                        file!(),
+                        line!(),
+                        ServerError::IOError(e)
+                    );
                 }
             }
             Err(e) => {
-                Self::error_log(&request, config, "handle_static_file", file!(), line!(), ServerError::IOError(e));
+                Self::error_log(
+                    &request,
+                    config,
+                    "handle_static_file",
+                    file!(),
+                    line!(),
+                    ServerError::IOError(e)
+                );
                 Self::send_error_response(
                     &self,
                     stream,
-                    request,
+                    &request,
                     config,
                     500,
                     "Internal Server Error",
@@ -356,18 +454,33 @@ impl Server {
                 );
 
                 if let Err(e) = stream.write_all(response.as_bytes()) {
-                    Self::error_log(&request, config, "handle_listing_directory", file!(), line!(), ServerError::IOError(e));
+                    Self::error_log(
+                        &request,
+                        config,
+                        "handle_listing_directory",
+                        file!(),
+                        line!(),
+                        ServerError::IOError(e)
+                    );
                 } else {
                     // Log request
                     self.access_log(&request, config, 200, &cookie);
+                    let _ = stream.flush();
                 }
             }
             Err(e) => {
-                Self::error_log(&request, config, "handle_listing_directory", file!(), line!(), ServerError::TeraError(e));
+                Self::error_log(
+                    &request,
+                    config,
+                    "handle_listing_directory",
+                    file!(),
+                    line!(),
+                    ServerError::TeraError(e)
+                );
                 Self::send_error_response(
                     &self,
                     stream,
-                    request,
+                    &request,
                     config,
                     500,
                     "Internal Server Error",
@@ -381,7 +494,7 @@ impl Server {
     fn send_error_response(
         &self,
         stream: &mut TcpStream,
-        request: Request,
+        request: &Request,
         config: &Config,
         status_code: u16,
         status_message: &str,
@@ -405,13 +518,28 @@ impl Server {
                     content
                 );
                 if let Err(e) = stream.write_all(response.as_bytes()) {
-                    Self::error_log(&request, config, "send_error_response", file!(), line!(), ServerError::IOError(e));
+                    Self::error_log(
+                        &request,
+                        config,
+                        "send_error_response",
+                        file!(),
+                        line!(),
+                        ServerError::IOError(e)
+                    );
                 } else {
                     self.access_log(&request, config, status_code, &cookie);
+                    let _ = stream.flush();
                 }
             }
             Err(e) => {
-                Self::error_log(&request, config, "send_error_response", file!(), line!(), ServerError::TeraError(e));
+                Self::error_log(
+                    &request,
+                    config,
+                    "send_error_response",
+                    file!(),
+                    line!(),
+                    ServerError::TeraError(e)
+                );
             }
         }
     }
