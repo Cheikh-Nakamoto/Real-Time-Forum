@@ -234,10 +234,24 @@ impl Server {
             Self::send_error_response(
                 &self,
                 &mut stream,
-                &request.clone(),
+                &request,
                 config,
                 405,
                 "Method Not Allowed",
+                &cookie
+            );
+            return;
+        }
+
+        // Size limit
+        if request.length > config.http.size_limit * 1000 {
+            Self::send_error_response(
+                &self,
+                &mut stream,
+                &request.clone(),
+                config,
+                413,
+                "Content Too Large",
                 &cookie
             );
             return;
@@ -310,7 +324,7 @@ impl Server {
 
                     match
                         (el.is_file() && !re.is_match(&name)) ||
-                        (el.is_dir() && self.directory_listing)
+                        (el.is_dir() && self.directory_listing && !re.is_match(&name))
                     {
                         true => {
                             let entry_name = remove_prefix(name.clone(), "/");
@@ -319,21 +333,26 @@ impl Server {
                                 entry: entry_name.clone(),
                                 entry_type: match el.is_dir() {
                                     true => "folder".to_string(),
-                                    _ =>{
-                                        let filename_parts = entry_name.split(".").collect::<Vec<&str>>();
+                                    _ => {
+                                        let filename_parts = entry_name
+                                            .split(".")
+                                            .collect::<Vec<&str>>();
                                         match filename_parts.len() {
                                             2 => {
                                                 let ext = format!("{}{}", ".", filename_parts[1]);
-                                                let mut file_formats: HashMap<&str, &str> = HashMap::new();
+                                                let mut file_formats: HashMap<
+                                                    &str,
+                                                    &str
+                                                > = HashMap::new();
                                                 file_formats.insert(".rb", "ruby");
                                                 file_formats.insert(".jpg", "image");
                                                 file_formats.insert(".jpeg", "image");
                                                 file_formats.insert(".png", "image");
                                                 file_formats.insert(".txt", "text");
-        
+
                                                 match file_formats.get(ext.as_str()) {
                                                     Some(filetype) => filetype.to_string(),
-                                                    None => "file".to_string()
+                                                    None => "file".to_string(),
                                                 }
                                             }
                                             _ => "file".to_string(),
