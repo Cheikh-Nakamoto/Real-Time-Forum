@@ -25,7 +25,7 @@ redirections = [
     { source = "/mouton", target = "/" },
     { source = "/chevre", target = "/" },
 ]
-exclusion = ["\\.*"]
+exclusion = ["a.txt"]
 
 [http.servers.server2]
 ip_addr = "127.0.0.10"
