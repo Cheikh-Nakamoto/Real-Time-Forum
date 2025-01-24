@@ -1,2 +1,10 @@
 [24-01-2025 18:18:01]: POST  - 127.0.0.10:8081 - Func: upload_file at src/server/mod.rs:653 - Error: IOError(Custom { kind: ConnectionAborted, error: "Client déconnecté avant la fin de l'upload." })
 
+[24-01-2025 18:21:19]: POST  - 127.0.0.10:8080 - Func: upload_file at src/server/mod.rs:704 - Error: IOError(Custom { kind: ConnectionAborted, error: "Client déconnecté avant la fin de l'upload." })
+
+[24-01-2025 18:23:32]: POST  - 127.0.0.10:8080 - Func: upload_file at src/server/mod.rs:704 - Error: IOError(Custom { kind: ConnectionAborted, error: "Client déconnecté avant la fin de l'upload." })
+
+[24-01-2025 18:26:21]: POST  - 127.0.0.10:8080 - Func: upload_file at src/server/mod.rs:704 - Error: IOError(Custom { kind: ConnectionAborted, error: "Client déconnecté avant la fin de l'upload." })
+
+[24-01-2025 18:58:12]: GET   - 127.0.0.10:8080 - Func: handle_static_file at src/server/mod.rs:544 - Error: IOError(Os { code: 11, kind: WouldBlock, message: "Resource temporarily unavailable" })
+
