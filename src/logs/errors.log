@@ -1,2 +1,0 @@
-[24-01-2025 18:18:01]: POST  - 127.0.0.10:8081 - Func: upload_file at src/server/mod.rs:653 - Error: IOError(Custom { kind: ConnectionAborted, error: "Client déconnecté avant la fin de l'upload." })
-
