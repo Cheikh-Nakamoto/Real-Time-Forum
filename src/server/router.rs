@@ -84,7 +84,7 @@ impl Router {
         // Enregistrer chaque listener avec un token unique
         for (token, listener) in &mut self.listeners {
             poll.registry()
-                .register(listener, *token, Interest::READABLE)?;
+                .register(listener, *token, Interest::READABLE | Interest::WRITABLE)?;
             server_tokens.insert(*token, listener.local_addr()?);
         }
 

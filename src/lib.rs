@@ -38,7 +38,7 @@ pub struct LogFilesConfig {
 pub struct HttpConfig {
     pub access_log_format: String,
     pub timeout: u64,
-    pub size_limit: u64,
+    pub size_limit: usize,
     pub servers: HashMap<String, Server>,
 }
 

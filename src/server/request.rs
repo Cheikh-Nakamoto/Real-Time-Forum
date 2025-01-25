@@ -1,5 +1,4 @@
-use std::io::Read;
-
+use std::{collections::HashMap, io::Read};
 use mio::net::TcpStream;
 
 // -------------------------------------------------------------------------------------
@@ -16,6 +15,8 @@ pub struct Request {
     pub body: String,
     pub filename: String,
     pub length: usize,
+    pub reference: String,
+    pub headers: HashMap<String, String>,
 }
 
 impl Request {
@@ -29,6 +30,8 @@ impl Request {
         body: String,
         filename: String,
         length: usize,
+        reference: String,
+        headers: HashMap<String, String>,
     ) -> Self {
         Self {
             id_session,
@@ -40,27 +43,46 @@ impl Request {
             body,
             filename,
             length,
+            reference,
+            headers,
         }
     }
+
     /// Lit une requête HTTP à partir d'un TcpStream.
     pub fn read_request(stream: &mut TcpStream) -> Self {
         let mut buffer = [0; 8192]; // Buffer de 8 Ko
         let mut request_str = String::new();
         let mut headers_end = None;
+        let mut content_length = 0;
+        let mut is_delete = false;
+        let mut byte_reader = 0;
 
         // Lire les données du client jusqu'à la fin des en-têtes
         loop {
-            let n = stream.read(&mut buffer).unwrap_or_default();
+            let n = match stream.read(&mut buffer) {
+                Ok(n) => n,
+                Err(_) => break, // Gestion des erreurs de lecture
+            };
             if n == 0 {
-                break;
+                break; // Connexion fermée par le client
             }
 
             // Convertir les données reçues en une chaîne de caractères
-            request_str.push_str(&String::from_utf8_lossy(&buffer[..n]));
+            let buff = String::from_utf8_lossy(&buffer[..n]);
+            if buff.starts_with("POST /DELETE") {
+                is_delete = true;
+            }
+            request_str.push_str(&buff);
+            byte_reader += n;
 
             // Vérifier si la fin des en-têtes a été atteinte
             if let Some(pos) = request_str.find("\r\n\r\n") {
                 headers_end = Some(pos);
+
+                if is_delete {
+                    // Extraire la valeur de Content-Length
+                    content_length = Self::extract_content_length(&request_str[..pos]);
+                }
                 break;
             }
         }
@@ -70,12 +92,47 @@ impl Request {
         let headers = &request_str[..headers_end];
 
         // Parser les en-têtes pour créer une instance de `Request`
-        let request = Request::parse_http_request(headers,headers_end);
+        let mut request = Request::parse_http_request(headers, headers_end, byte_reader);
+
+        // Si Content-Length > 0, lire le corps de la requête
+        if content_length > 0 {
+            // Calculer la quantité de données déjà lues dans le corps
+            let body_start = headers_end + 4; // 4 pour "\r\n\r\n"
+            let body_already_read = request_str.len() - body_start;
+
+            // Lire le reste du corps
+            let mut body = vec![0; content_length];
+            if body_already_read > 0 {
+                // Copier les données déjà lues dans le corps
+                body[..body_already_read].copy_from_slice(&request_str.as_bytes()[body_start..]);
+            }
+
+            // Lire les octets restants du corps avec stream.read_exact
+            if body_already_read < content_length {
+                stream
+                    .read_exact(&mut body[body_already_read..])
+                    .unwrap_or_default();
+            }
+
+            // Convertir le corps en String
+            request.body = String::from_utf8(body).unwrap_or_default();
+        }
 
         request
     }
+
+    /// Extrait la valeur de l'en-tête Content-Length.
+    fn extract_content_length(headers: &str) -> usize {
+        headers
+            .lines()
+            .find(|line| line.starts_with("Content-Length:"))
+            .and_then(|line| line.split(':').nth(1))
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .unwrap_or(0)
+    }
+
     /// Parse une requête HTTP et crée une instance de `Request`.
-    pub fn parse_http_request(request_str: &str, header_end:usize) -> Self {
+    pub fn parse_http_request(request_str: &str, header_end: usize, n: usize) -> Self {
         let mut location = String::new();
         let mut host = String::new();
         let mut port: u16 = 0;
@@ -83,6 +140,7 @@ impl Request {
         let mut filename = String::new();
         let mut body = String::new();
         let mut length = header_end;
+        let mut headers = HashMap::new();
 
         // Diviser la requête en lignes
         let lines: Vec<&str> = request_str.lines().collect();
@@ -114,6 +172,12 @@ impl Request {
                     .nth(1)
                     .and_then(|s| s.trim().parse::<usize>().ok())
                     .unwrap_or(0);
+            } else if line.contains(":") {
+                // Ajouter l'en-tête à la HashMap
+                let mut parts = line.splitn(2, ":");
+                if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
+                    headers.insert(key.trim().to_string(), value.trim().to_string());
+                }
             }
         }
 
@@ -131,6 +195,9 @@ impl Request {
             }
         }
 
+        let binding = Self::extract_header_value(&lines, "Referer:");
+        let referer = binding.split(":").nth(1).unwrap_or_default();
+
         // Créer une instance de `Request`
         Request::new(
             String::new(), // id_session (à remplir plus tard)
@@ -138,10 +205,12 @@ impl Request {
             host,
             port,
             method,
-            0,
+            n,
             body,
             filename,
             length,
+            referer.to_string(),
+            headers,
         )
     }
 
@@ -157,12 +226,13 @@ impl Request {
             String::new()
         }
     }
-    pub fn extract_header_value(headers: &[&str], paterne: &str) -> String {
+
+    pub fn extract_header_value(headers: &[&str], pattern: &str) -> String {
         let mut header_value = String::new();
 
         for line in headers {
-            if line.starts_with(paterne) {
-                let cookie_str = line.trim_start_matches(paterne).trim();
+            if line.starts_with(pattern) {
+                let cookie_str = line.trim_start_matches(pattern).trim();
                 for cookie in cookie_str.split(';') {
                     let mut parts = cookie.trim().splitn(2, '=');
                     if let (Some(_), Some(value)) = (parts.next(), parts.next()) {
@@ -174,4 +244,3 @@ impl Request {
         header_value
     }
 }
-// -------------------------------------------------------------------------------------

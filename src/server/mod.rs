@@ -1,12 +1,12 @@
 pub mod request;
-use std::collections::HashMap;
-pub use std::string::String;
 use chrono::Utc;
 use mio::net::TcpStream;
 use regex::RegexSet;
 pub use request::*;
+use std::collections::HashMap;
 use std::fs::{OpenOptions, ReadDir};
 use std::io::{Error, Read};
+pub use std::string::String;
 use std::time::{Duration, Instant};
 use std::{fs, io, io::Write, path::Path};
 
@@ -252,10 +252,24 @@ impl Server {
             Self::send_error_response(
                 &self,
                 &mut stream,
-                &request.clone(),
+                &request,
                 config,
                 405,
                 "Method Not Allowed",
+                &cookie,
+            );
+            return;
+        }
+
+        // Size limit
+        if request.length > config.http.size_limit * 1000 {
+            Self::send_error_response(
+                &self,
+                &mut stream,
+                &request.clone(),
+                config,
+                413,
+                "Content Too Large",
                 &cookie,
             );
             return;
@@ -274,16 +288,18 @@ impl Server {
         let entries: ReadDir;
         let all;
         let mut dir_path;
-
-        if !request.location.contains(".") && !request.location.contains("?") {
-            if !Path::new(&location).exists() {
+        if !request.location.contains(".")
+            && !request.location.contains("?")
+            && request.method == "GET"
+        {
+            if !Path::new(&location.trim_end_matches("/")).exists() {
                 Self::send_error_response(
                     &self,
                     &mut stream,
                     &request.clone(),
                     config,
                     404,
-                    "Not Found",
+                    "Not Found x",
                     &cookie,
                 );
                 return;
@@ -332,7 +348,7 @@ impl Server {
                     let re = re_init.unwrap();
 
                     match (el.is_file() && !re.is_match(&name))
-                        || (el.is_dir() && self.directory_listing)
+                        || (el.is_dir() && self.directory_listing && !re.is_match(&name))
                     {
                         true => {
                             let entry_name = remove_prefix(name.clone(), "/");
@@ -341,21 +357,23 @@ impl Server {
                                 entry: entry_name.clone(),
                                 entry_type: match el.is_dir() {
                                     true => "folder".to_string(),
-                                    _ =>{
-                                        let filename_parts = entry_name.split(".").collect::<Vec<&str>>();
+                                    _ => {
+                                        let filename_parts =
+                                            entry_name.split(".").collect::<Vec<&str>>();
                                         match filename_parts.len() {
                                             2 => {
                                                 let ext = format!("{}{}", ".", filename_parts[1]);
-                                                let mut file_formats: HashMap<&str, &str> = HashMap::new();
+                                                let mut file_formats: HashMap<&str, &str> =
+                                                    HashMap::new();
                                                 file_formats.insert(".rb", "ruby");
                                                 file_formats.insert(".jpg", "image");
                                                 file_formats.insert(".jpeg", "image");
                                                 file_formats.insert(".png", "image");
                                                 file_formats.insert(".txt", "text");
-        
+
                                                 match file_formats.get(ext.as_str()) {
                                                     Some(filetype) => filetype.to_string(),
-                                                    None => "file".to_string()
+                                                    None => "file".to_string(),
                                                 }
                                             }
                                             _ => "file".to_string(),
@@ -374,10 +392,12 @@ impl Server {
             self.handle_listing_directory(&mut stream, all, cookie, request.clone(), config);
             return;
         }
+
         if request.clone().location.contains("?") {
             let _ = self.create_folder(stream, &request.clone(), &*cookie.clone(), config);
-        }
-        if request.clone().method == "POST" {
+        } else if request.clone().method == "POST" && request.location.contains("DELETE") {
+            let _ = self.delete_elem(stream, &request.clone(), &*cookie.clone(), config);
+        } else if request.clone().method == "POST" {
             self.upload_file(stream, &mut request, config)
         } else if Path::new(&path).exists() {
             // Servir un fichier statique
@@ -394,6 +414,43 @@ impl Server {
                 &cookie,
             );
         }
+    }
+
+    fn get_body_from_stream(&self, stream: &mut TcpStream) {
+        let mut buffer = [0; 1024];
+        stream.read(&mut buffer).unwrap();
+
+        // Convertir les octets en chaîne de caractères
+        let request = String::from_utf8_lossy(&buffer[..]);
+
+        // Vérifier si c'est une requête POST
+        if request.starts_with("POST") {
+            // Trouver la fin des en-têtes HTTP
+            if let Some(body_start) = request.find("\r\n\r\n") {
+                let body = &request[body_start + 4..]; // Corps de la requête
+
+                // Parser les données du formulaire
+                let form_data: HashMap<String, String> = body
+                    .split('&')
+                    .map(|pair| {
+                        let mut key_value = pair.split('=');
+                        let key = key_value.next().unwrap_or("").to_string();
+                        let value = key_value.next().unwrap_or("").to_string();
+                        (key, value)
+                    })
+                    .collect();
+
+                // Afficher les données du formulaire
+                for (key, value) in form_data {
+                    println!("{}: {}", key, value);
+                }
+            }
+        }
+
+        // Répondre au client
+        let response = "HTTP/1.1 200 OK\r\n\r\nFormData received!";
+        stream.write(response.as_bytes()).unwrap();
+        stream.flush().unwrap();
     }
 
     fn create_folder(
@@ -462,54 +519,83 @@ impl Server {
         request: &Request,
         cookie: &str,
         config: &Config,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) {
         // 1. Construire le chemin du dossier
-        let folder_path = format!("/{}{}", self.root_directory, request.location);
-
-        // 2. Vérifier si le dossier existe déjà pour éviter des erreurs inutiles
-        if !Path::new(&folder_path).exists() && !folder_path.contains(".") {
+        let reference = request
+            .reference
+            .trim_start_matches(format!("http://{}", self.ip_addr).as_str());
+        let elem_name = request.body.split("=").nth(1).unwrap_or_default();
+        // 1. Construire le chemin du dossier
+        let folder_path = format!(
+            "./{}{}/{}",
+            self.root_directory,
+            reference,
+            elem_name.replace("%20", "")
+        );
+        println!("delet file ? : {}", folder_path);
+        if folder_path
+            .split(format!("./{}/", self.root_directory).as_str())
+            .nth(1)
+            .unwrap_or_default()
+            == ""
+        {
+            let _ = self.send_redirect_response(stream, "/");
+            return;
+        }
+        // 2. Vérifier si le dossier n'existe pas pour éviter des erreurs inutiles
+        if !Path::new(&folder_path).exists() {
             Self::send_error_response(
                 self,
                 stream,
                 &request.clone(),
                 config,
-                409, // Code HTTP 409 Conflict
-                "Le dossier existe déjà",
+                400, // Code HTTP 400 Not Found
+                "Bad Request :l'element choisit n'existe pas",
                 &cookie.to_string(),
+                
             );
-            return Ok(());
+            
+            return;
+        } else if request.location.contains(".") {
+            match fs::remove_file(&folder_path) {
+                Ok(_) => {
+                    // 4. Rediriger l'utilisateur vers l'URL d'origine (sans les paramètres de requête)
+                    let _ = self.send_redirect_response(stream, &*reference);
+                }
+                Err(e) => {
+                    // 5. Gérer les erreurs de création de dossier
+                    Self::send_error_response(
+                        self,
+                        stream,
+                        &request.clone(),
+                        config,
+                        500, // Code HTTP 500 Internal Server Error
+                        format!("Internal Server Error: \n{}", e).as_str(),
+                        &cookie.to_string(),
+                    );
+                }
+            }
         }
 
-        // 3. Créer le dossier
-        match fs::remove_dir(&folder_path) {
+        // 3. Supprimer le dossier
+        match fs::remove_dir_all(&folder_path) {
             Ok(_) => {
                 // 4. Rediriger l'utilisateur vers l'URL d'origine (sans les paramètres de requête)
-                let location = request.location.split('?').next().unwrap_or_default();
-                self.send_redirect_response(stream, location)?;
+                let _ = self.send_redirect_response(stream, &*reference);
             }
             Err(e) => {
                 // 5. Gérer les erreurs de création de dossier
-                Self::error_log(
-                    request,
-                    config,
-                    "create_folder",
-                    file!(),
-                    line!(),
-                    ServerError::IOError(&e),
-                );
                 Self::send_error_response(
                     self,
                     stream,
                     &request.clone(),
                     config,
                     500, // Code HTTP 500 Internal Server Error
-                    "Erreur interne du serveur",
+                    format!("Erreur interne du serveur :{} \n {}", e, folder_path).as_str(),
                     &cookie.to_string(),
                 );
             }
         }
-
-        Ok(())
     }
 
     fn handle_static_file(
@@ -720,12 +806,10 @@ impl Server {
     fn upload_file(&self, stream: &mut TcpStream, request: &mut Request, config: &Config) {
         let mut buffer = [0; 8192];
         let mut file = None;
-        let mut bytes_received = 0;
         let mut is_writing_file = false;
-        let start_time = Instant::now();
-        let max = request.length + ((request.length as f64) * 0.011007705) as usize;
-        let min = request.length - ((request.length as f64) * 0.011007705) as usize;
-
+        let mut header_pass = false; // Indique si les en-têtes ont été traités
+        let time = Instant::now();
+    
         loop {
             // Lire les données du client
             let n = match stream.read(&mut buffer) {
@@ -754,7 +838,7 @@ impl Server {
                 }
                 Ok(n) => n,
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if start_time.elapsed() > Duration::from_secs(config.http.timeout) {
+                    if time.elapsed() > Duration::from_secs(config.http.timeout) {
                         // Timeout après 10 secondes
                         self.send_error_response(
                             stream,
@@ -766,8 +850,8 @@ impl Server {
                         );
                         return;
                     }
-                    continue;
-                }
+                    continue
+                },
                 Err(e) => {
                     Self::error_log(
                         request,
@@ -788,15 +872,20 @@ impl Server {
                     return;
                 }
             };
-
-            let request_str = String::from_utf8_lossy(&buffer[..n]);
-
-            if file.is_none() {
-                if let Some(headers_end) = request_str.find("\r\n\r\n") {
-                    let headers = &request_str[..headers_end];
-
-                    request.filename = Self::extract_filename(headers);
-
+    
+            let request_data = &buffer[..n]; // Traiter les données comme binaires
+    
+            if !header_pass {
+                // Rechercher le délimiteur `\r\n\r\n` dans les données binaires
+                let delimiter = b"\r\n\r\n";
+                if let Some(headers_end) = request_data.windows(delimiter.len()).position(|w| w == delimiter) {
+                    // Extraire les en-têtes
+                    let headers = &request_data[..headers_end];
+                    let headers_str = String::from_utf8_lossy(headers); // Convertir en texte pour traitement
+    
+                    // Extraire le nom du fichier et autres informations des en-têtes
+                    request.filename = Self::extract_filename(&headers_str);
+    
                     if request.filename.is_empty() {
                         self.send_error_response(
                             stream,
@@ -808,7 +897,7 @@ impl Server {
                         );
                         return;
                     }
-
+    
                     if request.length == 0 {
                         self.send_error_response(
                             stream,
@@ -820,12 +909,14 @@ impl Server {
                         );
                         return;
                     }
-
+    
+                    // Créer le fichier
                     let filepath = format!(
                         "./{}{}/{}",
                         self.root_directory, request.location, request.filename
                     );
-
+                    println!("filepath: {}", filepath);
+    
                     file = match OpenOptions::new().create(true).write(true).open(&filepath) {
                         Ok(file) => Some(file),
                         Err(err) => {
@@ -848,13 +939,15 @@ impl Server {
                             return;
                         }
                     };
-
+    
                     is_writing_file = true;
-
-                    let data_start = headers_end + 4;
-                    if data_start < n {
+                    header_pass = true;
+    
+                    // Écrire les données du corps dans le fichier
+                    let body_start = headers_end + delimiter.len();
+                    if body_start < n {
                         if let Some(file) = &mut file {
-                            if let Err(err) = file.write_all(&buffer[data_start..n]) {
+                            if let Err(err) = file.write_all(&request_data[body_start..n]) {
                                 Self::error_log(
                                     request,
                                     config,
@@ -879,7 +972,7 @@ impl Server {
             } else if is_writing_file {
                 // Écrire les données binaires dans le fichier
                 if let Some(file) = &mut file {
-                    if let Err(err) = file.write_all(&buffer[..n]) {
+                    if let Err(err) = file.write_all(request_data) {
                         Self::error_log(
                             request,
                             config,
@@ -900,11 +993,17 @@ impl Server {
                     }
                 }
             }
-            bytes_received += n;
-
-            if bytes_received >= min && bytes_received <= max {
+    
+            request.bytes += n;
+            println!(
+                "{}<--->length: {} condition: {}",
+                request.bytes, request.length, request.bytes >= request.length
+            );
+    
+            if request.bytes >= request.length {
                 match self.send_redirect_response(stream, &*request.location) {
                     Ok(_) => {
+                        println!("reload de la page");
                         self.access_log(&request.clone(), config, 200, &request.id_session);
                         return;
                     }
@@ -931,11 +1030,13 @@ impl Server {
             }
         }
     }
-
     /// Extrait le nom du fichier des en-têtes.
     fn extract_filename(headers: &str) -> String {
         for line in headers.lines() {
+
             if line.contains("filename=") {
+
+                println!("{}",line);
                 if let Some(filename_part) = line.split("filename=").nth(1) {
                     let filename = filename_part.trim_matches(&['"', ';']).trim().to_string();
                     return filename;
@@ -976,6 +1077,7 @@ impl Server {
 
         // Envoyer la réponse au client
         stream.write_all(response.as_bytes())?;
+        let _ = stream.flush();
         Ok(())
     }
     fn check_and_clean_path(path: &str) -> String {
