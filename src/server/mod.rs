@@ -416,43 +416,6 @@ impl Server {
         }
     }
 
-    fn get_body_from_stream(&self, stream: &mut TcpStream) {
-        let mut buffer = [0; 1024];
-        stream.read(&mut buffer).unwrap();
-
-        // Convertir les octets en chaîne de caractères
-        let request = String::from_utf8_lossy(&buffer[..]);
-
-        // Vérifier si c'est une requête POST
-        if request.starts_with("POST") {
-            // Trouver la fin des en-têtes HTTP
-            if let Some(body_start) = request.find("\r\n\r\n") {
-                let body = &request[body_start + 4..]; // Corps de la requête
-
-                // Parser les données du formulaire
-                let form_data: HashMap<String, String> = body
-                    .split('&')
-                    .map(|pair| {
-                        let mut key_value = pair.split('=');
-                        let key = key_value.next().unwrap_or("").to_string();
-                        let value = key_value.next().unwrap_or("").to_string();
-                        (key, value)
-                    })
-                    .collect();
-
-                // Afficher les données du formulaire
-                for (key, value) in form_data {
-                    println!("{}: {}", key, value);
-                }
-            }
-        }
-
-        // Répondre au client
-        let response = "HTTP/1.1 200 OK\r\n\r\nFormData received!";
-        stream.write(response.as_bytes()).unwrap();
-        stream.flush().unwrap();
-    }
-
     fn create_folder(
         &self,
         stream: &mut TcpStream,
