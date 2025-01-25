@@ -1,6 +1,8 @@
 use std::{collections::HashMap, io::Read};
 use mio::net::TcpStream;
 
+use super::Server;
+
 // -------------------------------------------------------------------------------------
 // REQUEST
 // -------------------------------------------------------------------------------------
@@ -48,7 +50,6 @@ impl Request {
         }
     }
 
-    /// Lit une requête HTTP à partir d'un TcpStream.
     pub fn read_request(stream: &mut TcpStream) -> Self {
         let mut buffer = [0; 8192]; // Buffer de 8 Ko
         let mut request_str = String::new();
@@ -57,17 +58,15 @@ impl Request {
         let mut is_delete = false;
         let mut byte_reader = 0;
 
-        // Lire les données du client jusqu'à la fin des en-têtes
         loop {
             let n = match stream.read(&mut buffer) {
                 Ok(n) => n,
-                Err(_) => break, // Gestion des erreurs de lecture
+                Err(_) => break,
             };
             if n == 0 {
                 break; // Connexion fermée par le client
             }
 
-            // Convertir les données reçues en une chaîne de caractères
             let buff = String::from_utf8_lossy(&buffer[..n]);
             if buff.starts_with("POST /DELETE") {
                 is_delete = true;
@@ -80,7 +79,6 @@ impl Request {
                 headers_end = Some(pos);
 
                 if is_delete {
-                    // Extraire la valeur de Content-Length
                     content_length = Self::extract_content_length(&request_str[..pos]);
                 }
                 break;
@@ -90,38 +88,36 @@ impl Request {
         // Extraire les en-têtes
         let headers_end = headers_end.unwrap_or_default();
         let headers = &request_str[..headers_end];
+       
 
         // Parser les en-têtes pour créer une instance de `Request`
         let mut request = Request::parse_http_request(headers, headers_end, byte_reader);
 
         // Si Content-Length > 0, lire le corps de la requête
         if content_length > 0 {
-            // Calculer la quantité de données déjà lues dans le corps
-            let body_start = headers_end + 4; // 4 pour "\r\n\r\n"
+            
+            let body_start = headers_end + 4;
             let body_already_read = request_str.len() - body_start;
 
-            // Lire le reste du corps
             let mut body = vec![0; content_length];
             if body_already_read > 0 {
-                // Copier les données déjà lues dans le corps
                 body[..body_already_read].copy_from_slice(&request_str.as_bytes()[body_start..]);
             }
-
-            // Lire les octets restants du corps avec stream.read_exact
             if body_already_read < content_length {
                 stream
                     .read_exact(&mut body[body_already_read..])
                     .unwrap_or_default();
             }
-
-            // Convertir le corps en String
-            request.body = String::from_utf8(body).unwrap_or_default();
+          match std::str::from_utf8(&body){
+            Ok(convert) =>  request.body = convert.to_owned(),
+            Err(_) => ()
+          }
         }
-
         request
+
     }
 
-    /// Extrait la valeur de l'en-tête Content-Length.
+  
     fn extract_content_length(headers: &str) -> usize {
         headers
             .lines()
@@ -131,7 +127,7 @@ impl Request {
             .unwrap_or(0)
     }
 
-    /// Parse une requête HTTP et crée une instance de `Request`.
+    
     pub fn parse_http_request(request_str: &str, header_end: usize, n: usize) -> Self {
         let mut location = String::new();
         let mut host = String::new();

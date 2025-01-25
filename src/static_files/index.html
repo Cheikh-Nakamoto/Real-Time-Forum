@@ -155,7 +155,7 @@
           let filename = el.parentNode.querySelector(".filename").textContent;
           openModal("confirm-delete");
           document.querySelector("#modal_filename").textContent = filename;
-          document.querySelector("#file_to_delete").textContent = filename;
+          document.querySelector("#file_to_delete").value = filename;
         });
       });
 

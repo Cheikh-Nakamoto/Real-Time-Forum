@@ -484,18 +484,22 @@ impl Server {
         config: &Config,
     ) {
         // 1. Construire le chemin du dossier
-        let reference = request
-            .reference
-            .trim_start_matches(format!("http://{}", self.ip_addr).as_str());
-        let elem_name = request.body.split("=").nth(1).unwrap_or_default();
+        let mut reference = "".to_string();
+        if let Some(referer) = request.headers.get("Referer") {
+             reference ="/".to_string() + referer
+            .trim_start_matches(format!("http://{}", self.ip_addr).as_str()).split("/").nth(1).unwrap_or_default();
+        }
+
+       let elem_name = request.body.split("=").nth(1).unwrap_or_default().replace("+"," ");
         // 1. Construire le chemin du dossier
+    
         let folder_path = format!(
-            "./{}{}/{}",
+            "./{}{}{}",
             self.root_directory,
             reference,
-            elem_name.replace("%20", "")
+            elem_name
         );
-        println!("delet file ? : {}", folder_path);
+
         if folder_path
             .split(format!("./{}/", self.root_directory).as_str())
             .nth(1)
@@ -515,11 +519,10 @@ impl Server {
                 400, // Code HTTP 400 Not Found
                 "Bad Request :l'element choisit n'existe pas",
                 &cookie.to_string(),
-                
             );
-            
+
             return;
-        } else if request.location.contains(".") {
+        } else if  !Path::new(&folder_path).is_dir(){
             match fs::remove_file(&folder_path) {
                 Ok(_) => {
                     // 4. Rediriger l'utilisateur vers l'URL d'origine (sans les paramètres de requête)
@@ -996,10 +999,8 @@ impl Server {
     /// Extrait le nom du fichier des en-têtes.
     fn extract_filename(headers: &str) -> String {
         for line in headers.lines() {
-
             if line.contains("filename=") {
-
-                println!("{}",line);
+                println!("{}", line);
                 if let Some(filename_part) = line.split("filename=").nth(1) {
                     let filename = filename_part.trim_matches(&['"', ';']).trim().to_string();
                     return filename;
