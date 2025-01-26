@@ -486,19 +486,23 @@ impl Server {
         // 1. Construire le chemin du dossier
         let mut reference = "".to_string();
         if let Some(referer) = request.headers.get("Referer") {
-             reference ="/".to_string() + referer
-            .trim_start_matches(format!("http://{}", self.ip_addr).as_str()).split("/").nth(1).unwrap_or_default();
+            reference = "/".to_string()
+                + referer
+                    .trim_start_matches(format!("http://{}", self.ip_addr).as_str())
+                    .split("/")
+                    .nth(1)
+                    .unwrap_or_default();
         }
 
-       let elem_name = request.body.split("=").nth(1).unwrap_or_default().replace("+"," ");
+        let elem_name = request
+            .body
+            .split("=")
+            .nth(1)
+            .unwrap_or_default()
+            .replace("+", " ");
         // 1. Construire le chemin du dossier
-    
-        let folder_path = format!(
-            "./{}{}{}",
-            self.root_directory,
-            reference,
-            elem_name
-        );
+
+        let folder_path = format!("./{}{}{}", self.root_directory, reference, elem_name);
 
         if folder_path
             .split(format!("./{}/", self.root_directory).as_str())
@@ -522,7 +526,7 @@ impl Server {
             );
 
             return;
-        } else if  !Path::new(&folder_path).is_dir(){
+        } else if !Path::new(&folder_path).is_dir() {
             match fs::remove_file(&folder_path) {
                 Ok(_) => {
                     // 4. Rediriger l'utilisateur vers l'URL d'origine (sans les paramètres de requête)
@@ -770,244 +774,111 @@ impl Server {
     }
 
     fn upload_file(&self, stream: &mut TcpStream, request: &mut Request, config: &Config) {
-        let mut buffer = [0; 8192];
-        let mut file = None;
-        let mut is_writing_file = false;
-        let mut header_pass = false; // Indique si les en-têtes ont été traités
-        let time = Instant::now();
-    
-        loop {
-            // Lire les données du client
-            let n = match stream.read(&mut buffer) {
-                Ok(0) => {
-                    // Connexion fermée par le client
-                    Self::error_log(
-                        request,
-                        config,
-                        "upload_file",
-                        file!(),
-                        line!(),
-                        ServerError::IOError(&Error::new(
-                            io::ErrorKind::ConnectionAborted,
-                            "Client déconnecté avant la fin de l'upload.",
-                        )),
-                    );
-                    self.send_error_response(
-                        stream,
-                        &request.clone(),
-                        config,
-                        400,
-                        "Bad Request: Client disconnected",
-                        &request.id_session,
-                    );
-                    return;
-                }
-                Ok(n) => n,
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    if time.elapsed() > Duration::from_secs(config.http.timeout) {
-                        // Timeout après 10 secondes
-                        self.send_error_response(
-                            stream,
-                            &request.clone(),
-                            config,
-                            400,
-                            "Bad Request: Timeout waiting for file data",
-                            &request.id_session,
-                        );
-                        return;
-                    }
-                    continue
-                },
-                Err(e) => {
-                    Self::error_log(
-                        request,
-                        config,
-                        "upload_file",
-                        file!(),
-                        line!(),
-                        ServerError::IOError(&e),
-                    );
-                    self.send_error_response(
-                        stream,
-                        &request.clone(),
-                        config,
-                        500,
-                        "Internal Server Error: Failed to read from stream",
-                        &request.id_session,
-                    );
-                    return;
-                }
-            };
-    
-            let request_data = &buffer[..n]; // Traiter les données comme binaires
-    
-            if !header_pass {
-                // Rechercher le délimiteur `\r\n\r\n` dans les données binaires
-                let delimiter = b"\r\n\r\n";
-                if let Some(headers_end) = request_data.windows(delimiter.len()).position(|w| w == delimiter) {
-                    // Extraire les en-têtes
-                    let headers = &request_data[..headers_end];
-                    let headers_str = String::from_utf8_lossy(headers); // Convertir en texte pour traitement
-    
-                    // Extraire le nom du fichier et autres informations des en-têtes
-                    request.filename = Self::extract_filename(&headers_str);
-    
-                    if request.filename.is_empty() {
-                        self.send_error_response(
-                            stream,
-                            &request.clone(),
-                            config,
-                            400,
-                            "Bad Request: No file uploaded",
-                            &request.id_session,
-                        );
-                        return;
-                    }
-    
-                    if request.length == 0 {
-                        self.send_error_response(
-                            stream,
-                            &request.clone(),
-                            config,
-                            400,
-                            "Bad Request: File size is zero",
-                            &request.id_session,
-                        );
-                        return;
-                    }
-    
-                    // Créer le fichier
-                    let filepath = format!(
-                        "./{}{}/{}",
-                        self.root_directory, request.location, request.filename
-                    );
-                    println!("filepath: {}", filepath);
-    
-                    file = match OpenOptions::new().create(true).write(true).open(&filepath) {
-                        Ok(file) => Some(file),
-                        Err(err) => {
-                            Self::error_log(
-                                request,
-                                config,
-                                "upload_file",
-                                file!(),
-                                line!(),
-                                ServerError::IOError(&err),
-                            );
-                            self.send_error_response(
-                                stream,
-                                &request.clone(),
-                                config,
-                                500,
-                                &format!("Internal Server Error: Failed to open file - {}", err),
-                                &request.id_session,
-                            );
-                            return;
-                        }
-                    };
-    
-                    is_writing_file = true;
-                    header_pass = true;
-    
-                    // Écrire les données du corps dans le fichier
-                    let body_start = headers_end + delimiter.len();
-                    if body_start < n {
-                        if let Some(file) = &mut file {
-                            if let Err(err) = file.write_all(&request_data[body_start..n]) {
-                                Self::error_log(
-                                    request,
-                                    config,
-                                    "upload_file",
-                                    file!(),
-                                    line!(),
-                                    ServerError::IOError(&err),
-                                );
-                                self.send_error_response(
-                                    stream,
-                                    &request.clone(),
-                                    config,
-                                    500,
-                                    "Internal Server Error: Failed to write to file",
-                                    &request.id_session,
-                                );
-                                return;
-                            }
-                        }
-                    }
-                }
-            } else if is_writing_file {
-                // Écrire les données binaires dans le fichier
-                if let Some(file) = &mut file {
-                    if let Err(err) = file.write_all(request_data) {
-                        Self::error_log(
-                            request,
-                            config,
-                            "upload_file",
-                            file!(),
-                            line!(),
-                            ServerError::IOError(&err),
-                        );
-                        self.send_error_response(
-                            stream,
-                            &request.clone(),
-                            config,
-                            500,
-                            "Internal Server Error: Failed to write to file",
-                            &request.id_session,
-                        );
-                        return;
-                    }
-                }
-            }
-    
-            request.bytes += n;
-            println!(
-                "{}<--->length: {} condition: {}",
-                request.bytes, request.length, request.bytes >= request.length
+        // Vérifier si le nom du fichier est vide
+        if request.filename.is_empty() {
+            self.send_error_response(
+                stream,
+                &request.clone(),
+                config,
+                400,
+                "Bad Request: No file uploaded",
+                &request.id_session,
             );
-    
-            if request.bytes >= request.length {
-                match self.send_redirect_response(stream, &*request.location) {
-                    Ok(_) => {
-                        println!("reload de la page");
-                        self.access_log(&request.clone(), config, 200, &request.id_session);
-                        return;
-                    }
-                    Err(e) => {
-                        Self::error_log(
-                            request,
-                            config,
-                            "upload_file",
-                            file!(),
-                            line!(),
-                            ServerError::IOError(&e),
-                        );
-                        self.send_error_response(
-                            stream,
-                            &request.clone(),
-                            config,
-                            500,
-                            &format!("Internal Server Error: Failed to send redirect - {}", e),
-                            &request.id_session,
-                        );
-                        return;
-                    }
-                }
+            return;
+        }
+
+        // Vérifier si la taille du fichier est nulle
+        if request.length == 0 {
+            self.send_error_response(
+                stream,
+                &request.clone(),
+                config,
+                400,
+                "Bad Request: File size is zero",
+                &request.id_session,
+            );
+            return;
+        }
+
+        // Créer le chemin du fichier
+        let filepath = format!(
+            "./{}{}/{}",
+            self.root_directory, request.location, request.filename
+        );
+        println!("filepath: {}", filepath);
+
+        // Ouvrir ou créer le fichier
+        let mut file = match OpenOptions::new().create(true).write(true).open(&filepath) {
+            Ok(file) => file, // Déballer le fichier
+            Err(err) => {
+                Self::error_log(
+                    request,
+                    config,
+                    "upload_file",
+                    file!(),
+                    line!(),
+                    ServerError::IOError(&err),
+                );
+                self.send_error_response(
+                    stream,
+                    &request.clone(),
+                    config,
+                    500,
+                    &format!("Internal Server Error: Failed to open file - {}", err),
+                    &request.id_session,
+                );
+                return;
+            }
+        };
+        println!("ici 1");
+        // Écrire le contenu du fichier
+        if let Err(err) = file.write_all(request.body.as_bytes()) {
+            Self::error_log(
+                request,
+                config,
+                "upload_file",
+                file!(),
+                line!(),
+                ServerError::IOError(&err),
+            );
+            self.send_error_response(
+                stream,
+                &request.clone(),
+                config,
+                500,
+                "Internal Server Error: Failed to write to file",
+                &request.id_session,
+            );
+            return;
+        }
+        println!("ici 2");
+
+        // Envoyer une réponse de redirection
+        match self.send_redirect_response(stream, &*request.location) {
+            Ok(_) => {
+                self.access_log(&request.clone(), config, 200, &request.id_session);
+                return;
+            }
+            Err(e) => {
+                Self::error_log(
+                    request,
+                    config,
+                    "upload_file",
+                    file!(),
+                    line!(),
+                    ServerError::IOError(&e),
+                );
+                self.send_error_response(
+                    stream,
+                    &request.clone(),
+                    config,
+                    500,
+                    &format!("Internal Server Error: Failed to send redirect - {}", e),
+                    &request.id_session,
+                );
+                return;
             }
         }
-    }
-    /// Extrait le nom du fichier des en-têtes.
-    fn extract_filename(headers: &str) -> String {
-        for line in headers.lines() {
-            if line.contains("filename=") {
-                println!("{}", line);
-                if let Some(filename_part) = line.split("filename=").nth(1) {
-                    let filename = filename_part.trim_matches(&['"', ';']).trim().to_string();
-                    return filename;
-                }
-            }
-        }
-        String::new()
     }
 
     fn extract_folder_name(loaction: &str) -> String {

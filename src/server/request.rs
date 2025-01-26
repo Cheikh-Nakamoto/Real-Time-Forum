@@ -1,7 +1,5 @@
-use std::{collections::HashMap, io::Read};
 use mio::net::TcpStream;
-
-use super::Server;
+use std::{collections::HashMap, io::Read, str::from_utf8};
 
 // -------------------------------------------------------------------------------------
 // REQUEST
@@ -54,91 +52,101 @@ impl Request {
         let mut buffer = [0; 8192]; // Buffer de 8 Ko
         let mut request_str = String::new();
         let mut headers_end = None;
-        let mut content_length = 0;
-        let mut is_delete = false;
+        let mut is_post = false;
         let mut byte_reader = 0;
 
         loop {
-            let n = match stream.read(&mut buffer) {
-                Ok(n) => n,
-                Err(_) => break,
-            };
-            if n == 0 {
-                break; // Connexion fermée par le client
-            }
+            match stream.read(&mut buffer) {
+                Ok(n) => {
+                    let buff = String::from_utf8_lossy(&buffer[..n]);
+                    if buff.starts_with("POST") {
+                        is_post = true;
+                    }
+                    request_str.push_str(&buff);
+                    byte_reader += n;
 
-            let buff = String::from_utf8_lossy(&buffer[..n]);
-            if buff.starts_with("POST /DELETE") {
-                is_delete = true;
-            }
-            request_str.push_str(&buff);
-            byte_reader += n;
-
-            // Vérifier si la fin des en-têtes a été atteinte
-            if let Some(pos) = request_str.find("\r\n\r\n") {
-                headers_end = Some(pos);
-
-                if is_delete {
-                    content_length = Self::extract_content_length(&request_str[..pos]);
+                    if let Some(pos) = request_str.find("\r\n\r\n") {
+                        headers_end = Some(pos);
+                    }
                 }
-                break;
+                Err(_) => break,
             }
         }
-
-        // Extraire les en-têtes
-        let headers_end = headers_end.unwrap_or_default();
-        let headers = &request_str[..headers_end];
        
+        let headers_end = match headers_end {
+            Some(pos) => pos,
+            None => {
+                eprintln!("Requête incomplète : fin des en-têtes non trouvée");
+                return Request::new(
+                    String::new(),
+                    String::new(),
+                    String::new(),
+                    0,
+                    String::new(),
+                    0,
+                    String::new(),
+                    String::new(),
+                    0,
+                    String::new(),
+                    HashMap::new(),
+                );
+            }
+        };
+        
+        let headers = &request_str[..headers_end];
+       // println!(" \n {:#?} ",request_str.lines().collect::<Vec<&str>>());
+        println!(" \n {:#?} ",headers);
+          
 
-        // Parser les en-têtes pour créer une instance de `Request`
         let mut request = Request::parse_http_request(headers, headers_end, byte_reader);
-
-        // Si Content-Length > 0, lire le corps de la requête
-        if content_length > 0 {
-            
+        if is_post {
             let body_start = headers_end + 4;
-            let body_already_read = request_str.len() - body_start;
+            let body_already_not_read = request.length - body_start;
 
-            let mut body = vec![0; content_length];
-            if body_already_read > 0 {
-                body[..body_already_read].copy_from_slice(&request_str.as_bytes()[body_start..]);
+            let mut body = vec![0; request.length];
+
+            if body_already_not_read > 0 {
+                body = request_str.as_bytes()[body_start..].to_vec();
+                if let Some(pos) = body.windows(4).position(|elem| elem == b"\r\n\r\n") {
+                    println!("trouvé dexieme delimiteur a l'index : {}", pos);
+                    let sec_header = String::from_utf8_lossy(&body[..pos]).into_owned();
+                    body = body[pos + 4..].to_vec();
+                    let liste = sec_header.lines().collect::<Vec<&str>>();
+                    let filename = Self::extract_header_value(&liste, "Content-Disposition");
+                    println!("filename1 {} \n\n", filename);
+                    request.filename = filename.replace('"', "").to_string();
+                }
+                if request.filename.is_empty() {
+                    let liste = headers.lines().collect::<Vec<&str>>();
+                    let filename = Self::extract_header_value(&liste, "Content-Disposition");
+                    println!("filename2 {} \n\n", filename);
+                    request.filename = filename.replace('"', "").to_string();
+                }
             }
-            if body_already_read < content_length {
-                stream
-                    .read_exact(&mut body[body_already_read..])
-                    .unwrap_or_default();
-            }
-          match std::str::from_utf8(&body){
-            Ok(convert) =>  request.body = convert.to_owned(),
-            Err(_) => ()
-          }
+
+            let tmp = String::from_utf8_lossy(&body);
+            // let liste = &tmp.to_owned().lines().collect::<Vec<&str>>();
+            // let content_disposition = Self::extract_header_value(liste, "Content-Disposition");
+            // println!("value {}", content_disposition);
+            //    println!("body {} \n\n",tmp);
+
+            request.body = tmp.to_string();
         }
+
+        //println!("{:#?}", request.body.split("\n").collect::<Vec<&str>>());
         request
-
     }
 
-  
-    fn extract_content_length(headers: &str) -> usize {
-        headers
-            .lines()
-            .find(|line| line.starts_with("Content-Length:"))
-            .and_then(|line| line.split(':').nth(1))
-            .and_then(|s| s.trim().parse::<usize>().ok())
-            .unwrap_or(0)
-    }
-
-    
     pub fn parse_http_request(request_str: &str, header_end: usize, n: usize) -> Self {
         let mut location = String::new();
         let mut host = String::new();
         let mut port: u16 = 0;
         let mut method = String::new();
+        let body = String::new();
         let mut filename = String::new();
-        let mut body = String::new();
         let mut length = header_end;
         let mut headers = HashMap::new();
 
-        // Diviser la requête en lignes
         let lines: Vec<&str> = request_str.lines().collect();
 
         // Parser la première ligne (ex: "GET /index.html HTTP/1.1")
@@ -158,9 +166,13 @@ impl Request {
                 if host_parts.len() > 2 {
                     port = host_parts[2].parse::<u16>().unwrap_or(80);
                 }
-            } else if line.starts_with("Content-Disposition:") {
-                // Extraire le nom du fichier
-                filename = Self::extract_filename(line);
+            } else if line.starts_with("Content-Length:") {
+                // Extraire la taille du fichier
+                length += line
+                    .split(":")
+                    .nth(1)
+                    .and_then(|s| s.trim().parse::<usize>().ok())
+                    .unwrap_or(0);
             } else if line.starts_with("Content-Length:") {
                 // Extraire la taille du fichier
                 length += line
@@ -169,32 +181,24 @@ impl Request {
                     .and_then(|s| s.trim().parse::<usize>().ok())
                     .unwrap_or(0);
             } else if line.contains(":") {
-                // Ajouter l'en-tête à la HashMap
                 let mut parts = line.splitn(2, ":");
                 if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
-                    headers.insert(key.trim().to_string(), value.trim().to_string());
+                    let key = key.trim().trim_matches('"').to_string(); // Supprimer les espaces et les guillemets
+                    let value = value.trim().to_string(); // Supprimer les espaces
+                    if key == "Content-Disposition" {
+                        filename = Self::extract_filename(&value);
+                    }
+                    // Ignorer les en-têtes vides
+                    if !key.is_empty() && !value.is_empty() {
+                        headers.insert(key, value);
+                    }
                 }
-            }
-        }
-
-        // Parser le corps de la requête (s'il existe)
-        let mut is_body = false;
-        for line in lines.iter().skip(1) {
-            if line.is_empty() {
-                // Une ligne vide sépare les en-têtes du corps
-                is_body = true;
-                continue;
-            }
-            if is_body {
-                body.push_str(line);
-                body.push('\n');
             }
         }
 
         let binding = Self::extract_header_value(&lines, "Referer:");
         let referer = binding.split(":").nth(1).unwrap_or_default();
 
-        // Créer une instance de `Request`
         Request::new(
             String::new(), // id_session (à remplir plus tard)
             location,
@@ -208,19 +212,6 @@ impl Request {
             referer.to_string(),
             headers,
         )
-    }
-
-    fn extract_filename(header: &str) -> String {
-        let parts: Vec<&str> = header.split("filename=").collect();
-        if parts.len() > 1 {
-            parts[1]
-                .trim_matches('"')
-                .trim_matches(';')
-                .trim()
-                .to_string()
-        } else {
-            String::new()
-        }
     }
 
     pub fn extract_header_value(headers: &[&str], pattern: &str) -> String {
@@ -238,5 +229,17 @@ impl Request {
             }
         }
         header_value
+    }
+
+    fn extract_filename(content_disposition: &str) -> String {
+        for segment in content_disposition.split(';') {
+            let segment = segment.trim(); // Supprimer les espaces autour
+
+            if segment.starts_with("filename=") {
+                let filename = segment["filename=".len()..].trim();
+                return filename.trim_matches('"').to_string();
+            }
+        }
+        String::new()
     }
 }
