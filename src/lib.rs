@@ -1,6 +1,7 @@
 pub mod server;
 use std::{ collections::HashMap, fs };
 
+use regex::Regex;
 pub use server::*;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -45,7 +46,7 @@ pub struct HttpConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Redirection {
     pub source: String,
-    pub target: String
+    pub target: String,
 }
 
 pub fn load_config() -> Config {
@@ -64,5 +65,14 @@ pub fn remove_prefix(str: String, prefix: &str) -> String {
     match str.strip_prefix(prefix) {
         Some(txt) => txt.to_string(),
         None => str,
+    }
+}
+
+pub fn get_boundary(req: &String) -> Option<String> {
+    let re = Regex::new(r"boundary=(?<var_limit>[-_a-zA-Z0-9]+)\r").unwrap();
+    if let Some(caps) = re.captures(&req) {
+        Some(caps["var_limit"].to_string())
+    } else {
+        return None;
     }
 }

@@ -830,7 +830,7 @@ impl Server {
                 return;
             }
         };
-        println!("ici 1");
+        // println!("ici 1");
         // Écrire le contenu du fichier
         if let Err(err) = file.write_all(request.body.as_bytes()) {
             Self::error_log(
