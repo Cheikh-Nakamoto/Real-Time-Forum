@@ -1,6 +1,6 @@
 use mio::net::TcpStream;
 use regex::Regex;
-use std::{ collections::HashMap, io::{ BufReader, Read } };
+use std::{ collections::HashMap, io::Read };
 
 use crate::{ get_boundary, remove_prefix, remove_suffix };
 
