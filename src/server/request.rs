@@ -54,7 +54,6 @@ impl Request {
     pub fn read_request(stream: &mut TcpStream) -> Self {
         let mut buffer = [0; 8192]; // Buffer de 8 Ko
         let mut request_str = String::new();
-        let mut headers_end = None;
         let mut is_post = false;
         let mut byte_reader = 0;
         let new_line_pattern = "\r\n\r\n";
@@ -107,10 +106,9 @@ impl Request {
                 );
             }
             Some(header_limit) => {
-                let headers_end = headers_end.unwrap();
-                let headers = &request_str[..headers_end];
+                let headers = &request_str[..header_limit];
 
-                let mut request = Request::parse_http_request(headers, headers_end, byte_reader);
+                let mut request = Request::parse_http_request(headers, header_limit, byte_reader);
                 let mut form_data = vec![]; // Chaque HashMap représente un champ du formulaire.
 
                 if is_post {

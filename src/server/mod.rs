@@ -5,9 +5,9 @@ use regex::RegexSet;
 pub use request::*;
 use std::collections::HashMap;
 use std::fs::{OpenOptions, ReadDir};
-use std::io::{Error, Read};
+// use std::io::{Error, Read};
 pub use std::string::String;
-use std::time::{Duration, Instant};
+// use std::time::{Duration, Instant};
 use std::{fs, io, io::Write, path::Path};
 
 pub mod response;
