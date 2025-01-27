@@ -59,7 +59,7 @@ impl Request {
         let new_line_pattern = "\r\n\r\n";
 
         // ---------------------------------------------
-        // Autre manière de lire à tester
+        // Autre manière de lire à tester après
         // ---------------------------------------------
         // let mut reader = BufReader::new(stream);
         // let mut data = Vec::new();
