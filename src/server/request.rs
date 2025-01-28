@@ -5,8 +5,6 @@ use std::{ collections::HashMap, io::Read };
 
 use crate::{ get_boundary, get_content_length, remove_prefix, remove_suffix };
 
-use super::Router;
-
 // -------------------------------------------------------------------------------------
 // REQUEST
 // -------------------------------------------------------------------------------------
@@ -133,7 +131,7 @@ impl Request {
             Some(header_limit) => {
                 let headers = &request_str[..header_limit];
 
-                Request::parse_http_request(headers, header_limit, &mut request);
+                Request::parse_http_request(headers, &mut request);
 
                 let mut form_data: Vec<HashMap<&str, Option<String>>> = vec![]; // Chaque HashMap représente un champ du formulaire.
 
@@ -273,7 +271,7 @@ impl Request {
         });
     }
 
-    pub fn parse_http_request(request_str: &str, header_end: usize, request: &mut Request) {
+    pub fn parse_http_request(request_str: &str, request: &mut Request) {
         let mut location = String::new();
         let mut host = String::new();
         let mut port: u16 = 0;

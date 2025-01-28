@@ -746,7 +746,7 @@ impl Server {
         let filename = Request::extract_field(request, "filename");
 
         // Créer le chemin du fichier
-        let filepath = format!("./{}{}{}", self.root_directory, request.location, filename);
+        let filepath = format!("./{}{}/{}", self.root_directory, request.location, filename);
 
         // Ouvrir ou créer le fichier
         let mut file = match OpenOptions::new().create(true).write(true).open(&filepath) {
