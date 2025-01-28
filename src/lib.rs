@@ -76,3 +76,12 @@ pub fn get_boundary(req: &String) -> Option<String> {
         return None;
     }
 }
+
+pub fn get_content_length(req: &String) -> Option<String> {
+    let re = Regex::new(r"Content-Length:\s*(?<content_type>\d+)").unwrap();
+    if let Some(caps) = re.captures(&req) {
+        Some(caps["content_type"].to_string())
+    } else {
+        return None;
+    }
+}

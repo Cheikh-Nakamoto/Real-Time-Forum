@@ -20,6 +20,7 @@ pub struct Router {
     pub listeners: HashMap<Token, TcpListener>, // Associe un token à un TcpListener
     pub clients: HashMap<Token, TcpStream>,     // Associe un token à un TcpStream
     pub next_token: usize,
+    pub request_queue: Vec<Request>
 }
 
 impl Router {
@@ -30,6 +31,7 @@ impl Router {
             listeners: HashMap::new(),
             clients: HashMap::new(),
             next_token: CLIENT_START.0,
+            request_queue: vec![]
         }
     }
 
@@ -89,6 +91,7 @@ impl Router {
         }
 
         let mut events = Events::with_capacity(config.log_files.events_limit);
+
         loop {
             poll.poll(&mut events, None)?;
 
@@ -148,7 +151,30 @@ impl Router {
                             session.expiration_time,
                         );
                     }
-                    Self::route_request(self.servers.clone(), &req, stream, cookie, &config);
+
+                    if req.method == "GET" || req.method == "POST" {
+                        self.request_queue.push(req);                        
+                    } else {
+                        for (i, rq) in self.request_queue.clone().iter().enumerate() {
+                            if rq.method == "POST" {
+                                if let Some(content_length) = rq.content_length {
+                                    if content_length > rq.body.len() {
+                                        if let Some(boundary) = rq.boundary.clone() {
+                                            if req.body.contains(&boundary) {
+                                                self.request_queue[i].body.push_str(&req.body);
+                                                if let Some(content_length) = self.request_queue[i].content_length {
+                                                    if self.request_queue[i].body.len() >= content_length {
+                                                        self.request_queue[i].complete = true;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Self::route_request(&mut self.request_queue,self.servers.clone(), stream, cookie, &config);
                 }
             }
         }
@@ -169,17 +195,28 @@ impl Router {
 
     // Route une requête HTTP et génère une réponse.
     pub fn route_request(
+        request_queue: &mut Vec<Request>,
         servers: Vec<Server>,
-        req: &Request,
         stream: &mut TcpStream,
         cookie: String,
         config: &Config
     ) {
         // On récupère le hostname, l'adresse ip et le port de la requête
         // On parcoure la liste des serveurs et on vérifie lequel a le hostname, le port et l'ip correspondant
-        for server in servers.into_iter() {
-            if server.ip_addr == req.host && server.ports.contains(&req.port) {
-                server.handle_request(stream, req.clone(), cookie.clone(), config);
+        for (i, req) in request_queue.clone().into_iter().enumerate() {
+            for server in servers.iter() {
+                if server.ip_addr == req.host && server.ports.contains(&req.port) {
+                    if req.method == "GET" {
+                        server.handle_request(stream, req.clone(), cookie.clone(), config);
+                        request_queue.remove(i);
+                        break;
+                    }
+                    else if req.complete {
+                        server.handle_request(stream, req.clone(), cookie.clone(), config);
+                        request_queue.remove(i);
+                        break;
+                    }
+                }
             }
         }
     }
