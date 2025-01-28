@@ -1,8 +1,8 @@
 use mio::net::TcpStream;
 use regex::Regex;
-use std::{ collections::HashMap, io::Read };
+use std::{collections::HashMap, io::Read};
 
-use crate::{ get_boundary, remove_prefix, remove_suffix };
+use crate::{get_boundary, remove_prefix, remove_suffix};
 
 // -------------------------------------------------------------------------------------
 // REQUEST
@@ -10,6 +10,7 @@ use crate::{ get_boundary, remove_prefix, remove_suffix };
 #[derive(Debug, Clone)]
 pub struct Request {
     pub id_session: String,
+    pub content_type: String,
     pub location: String,
     pub host: String,
     pub port: u16,
@@ -25,6 +26,7 @@ pub struct Request {
 impl Request {
     pub fn new(
         id_session: String,
+        content_type: String,
         location: String,
         host: String,
         port: u16,
@@ -34,10 +36,11 @@ impl Request {
         filename: String,
         length: usize,
         reference: String,
-        headers: HashMap<String, String>
+        headers: HashMap<String, String>,
     ) -> Self {
         Self {
             id_session,
+            content_type,
             location,
             host,
             port,
@@ -95,35 +98,42 @@ impl Request {
                     String::new(),
                     String::new(),
                     String::new(),
-                    0,
                     String::new(),
                     0,
                     String::new(),
+                    0,
+                    String::new(),
                     String::new(),
                     0,
                     String::new(),
-                    HashMap::new()
+                    HashMap::new(),
                 );
             }
             Some(header_limit) => {
                 let headers = &request_str[..header_limit];
 
                 let mut request = Request::parse_http_request(headers, header_limit, byte_reader);
+                if request.location == "/DELETE" {
+                    let head = request_str.clone();
+                    request.filename = Self::extract_filename(&head[header_limit + 4..]);
+
+                    println!("{:#?}", request);
+                    return request;
+                }
+
                 let mut form_data = vec![]; // Chaque HashMap représente un champ du formulaire.
 
                 if is_post {
                     let mut head = request_str.clone();
                     let mut body = head.split_off(header_limit);
                     body = body.strip_prefix(new_line_pattern).unwrap().to_string();
-                    let boundary = get_boundary(&request_str).unwrap();
+                    let boundary = get_boundary(&request_str).unwrap_or_default();
                     let body_parts = body
                         .split(boundary.as_str())
-                        .map(|s|
-                            remove_suffix(remove_prefix(s.to_string(), "\r\n"), "\r\n--").replace(
-                                new_line_pattern,
-                                "; value="
-                            )
-                        )
+                        .map(|s| {
+                            remove_suffix(remove_prefix(s.to_string(), "\r\n"), "\r\n--")
+                                .replace(new_line_pattern, "; value=")
+                        })
                         .collect::<Vec<String>>();
 
                     // Tu peux jeter un coup d'œil sur la docu pour comprendre la syntaxe
@@ -138,8 +148,9 @@ impl Request {
                         (?:Content-Type:\s*(?<content_type>[^;]+)\s*)?
                     )*
                     ;\s*value=(?<value>.*)
-                    "#
-                    ).unwrap();
+                    "#,
+                    )
+                    .unwrap();
 
                     // Ici on parcourt les différentes parties du body pour voir si les champs recherchés sont là
                     body_parts.iter().for_each(|s| {
@@ -147,18 +158,19 @@ impl Request {
                             let mut values = HashMap::new();
                             values.insert(
                                 "content_disposition",
-                                Some(caps["content_disposition"].to_string())
+                                Some(caps["content_disposition"].to_string()),
                             );
+
                             values.insert("name", Some(caps["name"].to_string()));
                             values.insert(
                                 "filename",
-                                caps.name("filename").map_or(None, |m| Some(m.as_str().to_string()))
+                                caps.name("filename")
+                                    .map_or(None, |m| Some(m.as_str().to_string())),
                             );
                             values.insert(
                                 "content_type",
-                                caps
-                                    .name("content_type")
-                                    .map_or(None, |m| Some(m.as_str().to_string()))
+                                caps.name("content_type")
+                                    .map_or(None, |m| Some(m.as_str().to_string())),
                             );
                             values.insert("value", Some(caps["value"].to_string()));
                             form_data.push(values);
@@ -169,8 +181,20 @@ impl Request {
                     // Par exemple enregistrer l'image, pour le cas de la création de dossier tu auras ici
                     // Le nom du dossier à créer
                     // Tu sauras comment mettre à jour la variable request avec ces données collectées.
-                    println!("{:#?}", form_data);
+
+                    if let Some(hashmap) = form_data.get(0) {
+                        if let Some(Some(file)) = hashmap.get("filename") {
+                            request.filename = file.to_string();
+                        }
+                        if let Some(Some(file)) = hashmap.get("content_type") {
+                            request.content_type = file.to_string();
+                        }
+                        if let Some(Some(file)) = hashmap.get("value") {
+                            request.body = file.to_string();
+                        }
+                    }
                 }
+                println!("{:#?}", request);
                 request
             }
         }
@@ -219,8 +243,8 @@ impl Request {
         let mut host = String::new();
         let mut port: u16 = 0;
         let mut method = String::new();
-        let body = String::new();
-        let mut filename = String::new();
+        let mut body = String::new();
+        let filename = String::new();
         let mut length = header_end;
         let mut headers = HashMap::new();
 
@@ -262,10 +286,6 @@ impl Request {
                 if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
                     let key = key.trim().trim_matches('"').to_string(); // Supprimer les espaces et les guillemets
                     let value = value.trim().to_string(); // Supprimer les espaces
-                    if key == "Content-Disposition" {
-                        filename = Self::extract_filename(&value);
-                    }
-                    // Ignorer les en-têtes vides
                     if !key.is_empty() && !value.is_empty() {
                         headers.insert(key, value);
                     }
@@ -278,6 +298,7 @@ impl Request {
 
         Request::new(
             String::new(), // id_session (à remplir plus tard)
+            String::new(),
             location,
             host,
             port,
@@ -287,7 +308,7 @@ impl Request {
             filename,
             length,
             referer.to_string(),
-            headers
+            headers,
         )
     }
 
@@ -307,16 +328,20 @@ impl Request {
         }
         header_value
     }
-
-    fn extract_filename(content_disposition: &str) -> String {
-        for segment in content_disposition.split(';') {
-            let segment = segment.trim(); // Supprimer les espaces autour
-
-            if segment.starts_with("filename=") {
-                let filename = segment["filename=".len()..].trim();
-                return filename.trim_matches('"').to_string();
+    fn extract_filename(header: &str) -> String {
+        let parts: Vec<&str> = header.split("file_to_delete=").collect();
+        if parts.len() > 1 {
+            let mut value = parts[1]
+                .trim_matches('"')
+                .trim_matches(';')
+                .trim()
+                .to_string();
+            if value.contains("+") {
+                value = value.replace("+", " ");
             }
+            value
+        } else {
+            String::new()
         }
-        String::new()
     }
 }

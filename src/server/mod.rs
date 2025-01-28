@@ -262,7 +262,7 @@ impl Server {
         }
 
         // Size limit
-        if request.length > config.http.size_limit * 1000 {
+        if request.length > config.http.size_limit * 1024 {
             Self::send_error_response(
                 &self,
                 &mut stream,
@@ -494,22 +494,15 @@ impl Server {
                     .unwrap_or_default();
         }
 
-        let elem_name = request
-            .body
-            .split("=")
-            .nth(1)
-            .unwrap_or_default()
-            .replace("+", " ");
-        // 1. Construire le chemin du dossier
-
-        let folder_path = format!("./{}{}{}", self.root_directory, reference, elem_name);
-
+        let folder_path = format!("./{}{}{}", self.root_directory, reference, request.filename);
+        println!("{}", folder_path);
         if folder_path
             .split(format!("./{}/", self.root_directory).as_str())
             .nth(1)
             .unwrap_or_default()
             == ""
         {
+            println!("redirection");
             let _ = self.send_redirect_response(stream, "/");
             return;
         }
@@ -527,45 +520,15 @@ impl Server {
 
             return;
         } else if !Path::new(&folder_path).is_dir() {
-            match fs::remove_file(&folder_path) {
-                Ok(_) => {
-                    // 4. Rediriger l'utilisateur vers l'URL d'origine (sans les paramètres de requête)
-                    let _ = self.send_redirect_response(stream, &*reference);
-                }
-                Err(e) => {
-                    // 5. Gérer les erreurs de création de dossier
-                    Self::send_error_response(
-                        self,
-                        stream,
-                        &request.clone(),
-                        config,
-                        500, // Code HTTP 500 Internal Server Error
-                        format!("Internal Server Error: \n{}", e).as_str(),
-                        &cookie.to_string(),
-                    );
-                }
-            }
+            let _ = fs::remove_file(&folder_path);
+            // 4. Rediriger l'utilisateur vers l'URL d'origine (sans les paramètres de requête)
+            let _ = self.send_redirect_response(stream, &*reference);
         }
 
         // 3. Supprimer le dossier
-        match fs::remove_dir_all(&folder_path) {
-            Ok(_) => {
-                // 4. Rediriger l'utilisateur vers l'URL d'origine (sans les paramètres de requête)
-                let _ = self.send_redirect_response(stream, &*reference);
-            }
-            Err(e) => {
-                // 5. Gérer les erreurs de création de dossier
-                Self::send_error_response(
-                    self,
-                    stream,
-                    &request.clone(),
-                    config,
-                    500, // Code HTTP 500 Internal Server Error
-                    format!("Erreur interne du serveur :{} \n {}", e, folder_path).as_str(),
-                    &cookie.to_string(),
-                );
-            }
-        }
+        let _ = fs::remove_dir_all(&folder_path);
+        // 4. Rediriger l'utilisateur vers l'URL d'origine (sans les paramètres de requête)
+        let _ = self.send_redirect_response(stream, &*reference);
     }
 
     fn handle_static_file(
@@ -802,7 +765,7 @@ impl Server {
 
         // Créer le chemin du fichier
         let filepath = format!(
-            "./{}{}/{}",
+            "./{}{}{}",
             self.root_directory, request.location, request.filename
         );
         println!("filepath: {}", filepath);
@@ -905,16 +868,23 @@ impl Server {
             "HTTP/1.1 302 Found\r\n\
              Location: {}\r\n\
              Content-Length: 0\r\n\
-             Connection: close\r\n\
+             Cache-Control: no-cache, no-store, must-revalidate\r\n\
+             Pragma: no-cache\r\n\
+             Expires: 0\r\n\
              \r\n",
             location
         );
-
-        // Envoyer la réponse au client
-        stream.write_all(response.as_bytes())?;
-        let _ = stream.flush();
+        match stream.write_all(response.as_bytes()) {
+            Ok(_) => println!("Response sent successfully."),
+            Err(e) => println!("Failed to send response: {}", e),
+        }
+        match stream.flush() {
+            Ok(_) => println!("Stream flushed successfully."),
+            Err(e) => println!("Failed to flush stream: {}", e),
+        }
         Ok(())
     }
+
     fn check_and_clean_path(path: &str) -> String {
         // Trouver l'index du motif "images/" ou "css/"
         if let Some(index) = path.find("/images/").or_else(|| path.find("/css/")) {
