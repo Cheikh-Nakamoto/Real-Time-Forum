@@ -772,10 +772,10 @@ impl Server {
             }
         };
 
-        let file_content = Request::extract_field(request, "value");
-
+        //let file_content = Request::extract_field(request, "value");
+        let file_content = Request::extract_values(&request.body_byte,request.boundary.clone().unwrap_or_default());
         // Écrire le contenu du fichier
-        if let Err(err) = file.write_all(file_content.as_bytes()) {
+        if let Err(err) = file.write_all(&file_content) {
             Self::error_log(
                 request,
                 config,

@@ -162,6 +162,8 @@ impl Router {
                                         if let Some(boundary) = rq.boundary.clone() {
                                             if req.body.contains(&boundary) {
                                                 self.request_queue[i].body.push_str(&req.body);
+                                                self.request_queue[i].body_byte.extend_from_slice(&req.body_byte);
+                                               
                                                 if let Some(content_length) = self.request_queue[i].content_length {
                                                     if self.request_queue[i].body.len() >= content_length {
                                                         self.request_queue[i].complete = true;

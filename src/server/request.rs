@@ -1,9 +1,9 @@
 use chrono::Utc;
 use mio::net::TcpStream;
 use regex::Regex;
-use std::{ collections::HashMap, io::Read };
+use std::{collections::HashMap, io::Read};
 
-use crate::{ get_boundary, get_content_length, remove_prefix, remove_suffix };
+use crate::{get_boundary, get_content_length, remove_prefix, remove_suffix};
 
 // -------------------------------------------------------------------------------------
 // REQUEST
@@ -18,6 +18,7 @@ pub struct Request {
     pub port: u16,
     pub method: String,
     pub body: String,
+    pub body_byte: Vec<u8>,
     pub filename: String,
     pub length: usize,
     pub reference: String,
@@ -36,9 +37,10 @@ impl Request {
         port: u16,
         method: String,
         body: String,
+        body_byte: Vec<u8>,
         filename: String,
         length: usize,
-        reference: String
+        reference: String,
     ) -> Self {
         Self {
             id_session,
@@ -49,6 +51,7 @@ impl Request {
             port,
             method,
             body,
+            body_byte,
             filename,
             length,
             reference,
@@ -68,15 +71,17 @@ impl Request {
             0,
             String::new(),
             String::new(),
+            vec![],
             String::new(),
             0,
-            String::new()
+            String::new(),
         )
     }
 
-    pub fn stream_to_str(stream: &mut TcpStream) -> String {
+    pub fn stream_to_str(stream: &mut TcpStream) -> (String, Vec<u8>) {
         let mut buffer = [0; 8192]; // Buffer de 8 Ko
         let mut request_str = String::new();
+        let mut buff_complete = vec![];
 
         // ---------------------------------------------
         // Autre manière de lire à tester après
@@ -92,6 +97,7 @@ impl Request {
                 Ok(n) => {
                     let buff = String::from_utf8_lossy(&buffer[..n]);
                     request_str.push_str(&buff);
+                    buff_complete.extend_from_slice(&buffer[..n]);
 
                     // if let Some(pos) = request_str.find(&new_line_pattern) {
                     //     headers_end = Some(pos);
@@ -102,16 +108,17 @@ impl Request {
                 }
             }
         }
-        request_str
+        (request_str, buff_complete)
     }
 
     pub fn read_request(stream: &mut TcpStream) -> Self {
         let new_line_pattern = "\r\n\r\n";
         let mut request = Request::default();
-        let request_str = Self::stream_to_str(stream);
+        let (request_str, body_byte) = Self::stream_to_str(stream);
         let mut is_post = false;
 
         request.body = request_str.clone();
+        request.body_byte = body_byte.clone();
 
         if request_str.starts_with("GET") {
             request.complete = true;
@@ -217,16 +224,14 @@ impl Request {
     pub fn extract_form_data(
         body: &String,
         boundary: String,
-        form_data: &mut Vec<HashMap<&str, Option<String>>>
+        form_data: &mut Vec<HashMap<&str, Option<String>>>,
     ) {
         let new_line_pattern = "\r\n\r\n";
         let body_parts = body
             .split(boundary.as_str())
             .map(|s| {
-                remove_suffix(remove_prefix(s.to_string(), "\r\n"), "\r\n--").replace(
-                    new_line_pattern,
-                    "; value="
-                )
+                remove_suffix(remove_prefix(s.to_string(), "\r\n"), "\r\n--")
+                    .replace(new_line_pattern, "; value=")
             })
             .collect::<Vec<String>>();
 
@@ -243,27 +248,34 @@ impl Request {
                         (?:Content-Type:\s*(?<content_type>[^;]+)\s*)?
                     )*
                     ;\s*value=(?<value>.*)?
-                    "#
-        ).unwrap();
+                    "#,
+        )
+        .unwrap();
 
         // Ici on parcourt les différentes parties du body pour voir si les champs recherchés sont là
         body_parts.iter().for_each(|s| {
             if let Some(caps) = re.captures(&s) {
                 let mut values = HashMap::new();
-                values.insert("content_disposition", Some(caps["content_disposition"].to_string()));
+                values.insert(
+                    "content_disposition",
+                    Some(caps["content_disposition"].to_string()),
+                );
 
                 values.insert("name", Some(caps["name"].to_string()));
                 values.insert(
                     "filename",
-                    caps.name("filename").map_or(None, |m| Some(m.as_str().to_string()))
+                    caps.name("filename")
+                        .map_or(None, |m| Some(m.as_str().to_string())),
                 );
                 values.insert(
                     "content_type",
-                    caps.name("content_type").map_or(None, |m| Some(m.as_str().to_string()))
+                    caps.name("content_type")
+                        .map_or(None, |m| Some(m.as_str().to_string())),
                 );
                 values.insert(
                     "file_to_delete",
-                    caps.name("file_to_delete").map_or(None, |m| Some(m.as_str().to_string()))
+                    caps.name("file_to_delete")
+                        .map_or(None, |m| Some(m.as_str().to_string())),
                 );
                 values.insert("value", Some(caps["value"].to_string()));
                 form_data.push(values);
@@ -345,5 +357,31 @@ impl Request {
             }
         }
         filename
+    }
+    /*
+        La fonction cherche sucessivement le paterne \r\n\r\n puis le bopundary 
+        et encore \r\n\r\n et separe a chaque fois ! 
+     */
+    pub fn extract_values(body: &[u8], boundary: String) -> Vec<u8> {
+        let new_line_pattern = b"\r\n\r\n";
+        let start_boundary_pattern = format!("\r\n--{}", boundary).into_bytes();
+        let start_pos = body
+            .windows(new_line_pattern.len())
+            .position(|window| window == new_line_pattern)
+            .unwrap_or_default();
+
+        let headers_end = start_pos + new_line_pattern.len();
+        let start_pos_body = body[headers_end..]
+            .windows(start_boundary_pattern.len())
+            .position(|window| window == start_boundary_pattern)
+            .unwrap_or_default();
+
+        let file_end = headers_end + start_pos_body;
+        let tmp = body[headers_end..file_end].to_vec();
+        let fist = tmp
+            .windows(new_line_pattern.len())
+            .position(|window| window == new_line_pattern)
+            .unwrap_or_default();
+        tmp[fist + 4..].to_vec()
     }
 }
