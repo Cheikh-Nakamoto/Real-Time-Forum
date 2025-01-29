@@ -126,7 +126,7 @@
         </form>
         `;
       let confirmDeleteHTML = `
-        <form method="POST" class="bg-white rounded-lg p-8 m-auto shadow-md">
+        <form method="POST" enctype="multipart/form-data" class="bg-white rounded-lg p-8 m-auto shadow-md">
             <p class="text-center text-gray-800 font-medium mb-6">Do you want delete this: <span id="modal_filename"></span></p>
             <input id="file_to_delete" type="text" name="file_to_delete" hidden>
             <div class="flex justify-center gap-4">
@@ -155,7 +155,7 @@
           let filename = el.parentNode.querySelector(".filename").textContent;
           openModal("confirm-delete");
           document.querySelector("#modal_filename").textContent = filename;
-          document.querySelector("#file_to_delete").textContent = filename;
+          document.querySelector("#file_to_delete").value = filename;
         });
       });
 
