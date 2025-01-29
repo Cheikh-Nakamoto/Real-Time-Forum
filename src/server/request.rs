@@ -287,6 +287,7 @@ impl Request {
         let mut location = String::new();
         let mut host = String::new();
         let mut port: u16 = 0;
+        let mut cookie = String::new();
         let mut headers = HashMap::new();
 
         let lines: Vec<&str> = request_str.lines().collect();
@@ -311,6 +312,9 @@ impl Request {
                 let mut parts = line.splitn(2, ":");
                 if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
                     let key = key.trim().trim_matches('"').to_string(); // Supprimer les espaces et les guillemets
+                    if key == "Cookie"{
+                     cookie = value.to_owned();
+                    }
                     let value = value.trim().to_string(); // Supprimer les espaces
                     if !key.is_empty() && !value.is_empty() {
                         headers.insert(key, value);
@@ -323,6 +327,7 @@ impl Request {
         let referer = binding.split(":").nth(1).unwrap_or_default();
 
         request.location = location;
+        request.id_session = cookie.trim().strip_prefix("cookie_01=").unwrap_or_default().to_owned();
         request.host = host;
         request.port = port;
         request.length = request.body.len();
